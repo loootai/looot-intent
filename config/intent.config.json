@@ -1,0 +1,24 @@
+{
+  "icp": {
+    "description": "B2B SaaS companies with 50 to 500 employees that sell to sales and marketing teams and are growing their go-to-market team.",
+    "jobTitleKeywords": ["sales", "revenue", "growth", "marketing", "demand generation", "sdr", "account executive", "operations"],
+    "technologies": ["HubSpot", "Salesforce", "Outreach", "Salesloft", "Segment", "Snowflake"],
+    "newsCategories": ["receives_financing", "expands_offices_in", "increases_headcount_by", "hires", "launches", "partners_with", "opens_new_location", "goes_public", "acquires", "signs_new_client"]
+  },
+  "stages": { "aware": 20, "considering": 45, "deciding": 70, "decidingMinCategories": 3 },
+  "activeStrength": 0.25,
+  "freshnessWindow": "week",
+  "concurrency": 4,
+  "signals": {
+    "hiring":        { "enabled": true, "weight": 22, "halfLifeDays": 45,  "saturation": 6 },
+    "funding":       { "enabled": true, "weight": 15, "halfLifeDays": 120, "saturation": 1 },
+    "news":          { "enabled": true, "weight": 10, "halfLifeDays": 30,  "saturation": 3 },
+    "tech":          { "enabled": true, "weight": 8,  "halfLifeDays": 120, "saturation": 2 },
+    "seo":           { "enabled": true, "weight": 8,  "halfLifeDays": 30,  "saturation": 0.25 },
+    "traffic":       { "enabled": true, "weight": 8,  "halfLifeDays": 30,  "saturation": 0.2 },
+    "ads_google":    { "enabled": true, "weight": 7,  "halfLifeDays": 30,  "saturation": 5 },
+    "ads_linkedin":  { "enabled": true, "weight": 8,  "halfLifeDays": 30,  "saturation": 4 },
+    "social_reddit": { "enabled": true, "weight": 4,  "halfLifeDays": 21,  "saturation": 4 },
+    "headcount":     { "enabled": true, "weight": 10, "halfLifeDays": 30,  "saturation": 0.1 }
+  }
+}

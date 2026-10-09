@@ -1,0 +1,25 @@
+# looot-intent
+
+> Open-source account intent and buying-stage scoring on looot. Input: company domains and an ICP description. Output: a ranked list with a 0 to 100 score, a stage (unaware, aware, considering, deciding) and, per account, the signals, provider, weight and cost behind the score.
+
+## Run it
+
+- Needs Node 20+, and `LOOOT_TOKEN` for real runs. Install: `npm install --ignore-scripts`.
+- Free preview of cost: `npm run intent -- domains.txt --dry-run` (no run, no charge).
+- Real run: `npm run intent -- domains.txt --max-spend 5`. Refuses when the quote is above the cap. Writes out/intent-<run>.json, .csv, .md.
+- Sample data, no token: `npm run intent -- --demo` or `npm run demo` for the web UI.
+- Exit codes: 0 done, 1 error, 2 refused (over cap or no token).
+
+## Files
+
+- config/intent.config.json: signal weights, half-lives, stage thresholds, ICP keyword lists. Edit this to change scoring.
+- src/engine/signals.ts: the ten looot endpoints, their inputs and parsers.
+- src/engine/score.ts: the scoring rules.
+- skills/looot-intent/SKILL.md: Claude Code skill.
+
+## Rules for agents
+
+- Always run --dry-run first and show the quote to the user before a real run.
+- Never raise --max-spend without the user's word.
+- A "pending" call is not a failure. Re-run in the same week to collect it without a second charge.
+- No paid run has been verified against real provider responses yet. Say so when reporting results.
