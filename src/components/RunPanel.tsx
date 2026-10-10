@@ -60,7 +60,7 @@ export function RunPanel({ initialDomains, initialIcp, demo, canRun }: { initial
   }
 
   return (
-    <section className="rounded-panel border border-line bg-panel p-4" aria-label="Score accounts">
+    <section id="run" className="scroll-mt-20 rounded-panel border border-line bg-panel p-4" aria-label="Score accounts">
       <div className="grid gap-4 lg:grid-cols-[1.2fr_1fr_auto]">
         <label className="grid gap-1">
           <span className="text-12 font-medium text-mute">Company domains, one per line</span>

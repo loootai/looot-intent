@@ -24,7 +24,7 @@ export default async function AccountPage({ params }: { params: Promise<{ domain
   const undated = a.events.filter((e) => !e.date);
   const byPoints = [...a.breakdown].sort((x, y) => y.points - x.points || y.maxPoints - x.maxPoints);
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-1 gap-6">
       <Link href="/" className="inline-flex w-fit items-center gap-1 text-12 text-mute hover:text-ink"><ArrowLeft size={14} /> All accounts</Link>
 
       <header className="flex flex-wrap items-center gap-x-6 gap-y-3">

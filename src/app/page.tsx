@@ -12,7 +12,7 @@ export default async function Home() {
   const demo = isDemo();
   const initialDomains = run ? run.accounts.map((a) => a.domain).join("\n") : "";
   return (
-    <div className="grid gap-6">
+    <div className="grid grid-cols-1 gap-6">
       <div>
         <h1 className="text-20 font-medium tracking-tight">Account intent</h1>
         <p className="mt-1 max-w-3xl text-mute">
