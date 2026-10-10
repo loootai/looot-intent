@@ -4,7 +4,9 @@
 
 ## Run it
 
-- Needs Node 20+, and `LOOOT_TOKEN` for real runs. Install: `npm install --ignore-scripts`.
+- Needs Node 20.9+ (tests 22.12+), and `LOOOT_TOKEN` for real runs. Install: `npm install --ignore-scripts`.
+- Token: `looot login` (npm i -g looot) or looot Settings > Agent tokens, scopes runs.execute, catalog.read, runs.read, usage.read. Runs need a funded balance (top-up from $5). The CLI reads the shell environment, not `.env.local`.
+- Example inputs: examples/domains.txt, examples/accounts.csv (`--column domain`). Full setup, env table and troubleshooting are in README.md.
 - Free preview of cost: `npm run intent -- domains.txt --dry-run` (no run, no charge).
 - Real run: `npm run intent -- domains.txt --max-spend 5`. Refuses when the quote is above the cap. Writes out/intent-<run>.json, .csv, .md.
 - Sample data, no token: `npm run intent -- --demo` or `npm run demo` for the web UI.

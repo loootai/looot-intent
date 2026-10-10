@@ -7,6 +7,8 @@ description: Score company domains for buying intent and rank them with an expla
 
 Runs the looot-intent CLI from a clone of https://github.com/loootai/looot-intent.
 
+Setup (Node 20.9+, `npm install --ignore-scripts`, token and balance) is in the README under "What you need". Troubleshooting messages are under "Troubleshooting".
+
 1. Put the domains in a text file, one per line, or a CSV with a `domain` column.
 2. Quote first, no charge:
    `npm run intent -- <file> --icp "<ICP in one sentence>" --max-spend <usd> --dry-run`
