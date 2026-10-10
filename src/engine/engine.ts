@@ -132,7 +132,7 @@ export async function runIntent(opts: RunOptions): Promise<{ result: RunResult; 
     const listPriceMicros = prices[def.endpointId] ?? def.fallbackMicros;
     const base = { signalId: def.id, listPriceMicros, events: [] as SignalEvent[], costMicros: 0 };
     if (aborted) return { ...base, status: "skipped_cap", message: aborted };
-    if (!opts.demo && unpriced.has(def.endpointId)) return { ...base, status: "skipped_price", message: "Live price could not be read." };
+    if (!opts.demo && unpriced.has(def.endpointId)) return { ...base, status: "skipped_price", message: "Source unavailable: the catalog has no readable price for this endpoint." };
     if (!opts.demo && committed + listPriceMicros > opts.capMicros) {
       skippedByCap += 1;
       return { ...base, status: "skipped_cap", message: "Spend cap reached." };

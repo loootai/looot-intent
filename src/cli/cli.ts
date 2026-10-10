@@ -147,7 +147,7 @@ export async function main(argv: string[], env: Record<string, string | undefine
     out(`${domains.length} accounts, ${quote.lines.length} signals each.`);
     out(quoteTable(quote));
     out(`Quoted ${usd(quote.totalMicros)} at list price. Cap ${usd(capMicros)}.`);
-    if (unpriced.length) out(`Live price unreadable for ${unpriced.join(", ")}. Those calls will be skipped.`);
+    if (unpriced.length) out(`Source unavailable: ${unpriced.join(", ")} has no readable price in the catalog. Those calls will be skipped and shown as source unavailable.`);
 
     if (args.dryRun) {
       out("Dry run: no run was made and nothing was charged.");

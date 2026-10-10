@@ -79,17 +79,16 @@ npm run intent -- examples/accounts.csv --column domain --icp "B2B SaaS, 50 to 5
   SEO movement         dataforseo     keywords.domain.overview     $0.0120 x    3 =   $0.0360
   Web traffic          datagma        company.traffic             $0.06532 x    3 =  $0.19596
   Google ads           scrapecreators google.company.ads          $0.00188 x    3 =  $0.00564
-  LinkedIn ads         adyntel        ads.linkedin.search         $0.00642 x    3 =  $0.01926
+  LinkedIn ads         scrapecreators ads.linkedin.search         $0.00188 x    3 =  $0.00564
   Reddit mentions      scrapecreators reddit.post.search          $0.00188 x    3 =  $0.00564
   Headcount growth     companyenrich  company.workforce            $0.0490 x    3 =   $0.1470
-  Total                                                            $0.1765 per account     $0.53
+  Total                                                            $0.17196 per account     $0.52
   Prices: dated fallback in the code
-Quoted $0.53 at list price. Cap $5.00.
-Live price unreadable for adyntel-linkedin. Those calls will be skipped.
+Quoted $0.52 at list price. Cap $5.00.
 Dry run: no run was made and nothing was charged.
 ```
 
-On 2026-10-10 the live catalog had no `adyntel-linkedin` entry, so the CLI fell back to the dated prices and will skip LinkedIn ads. See Troubleshooting. Add `--offline` to skip the catalog read entirely.
+Add `--offline` to skip the catalog read and use the dated prices. When the live catalog has no readable price for an endpoint, the CLI prints "Source unavailable" for it and skips those calls, and the web UI shows a "source unavailable" chip on that signal.
 
 Then the real run:
 
@@ -107,7 +106,7 @@ The web UI on a live key: put `LOOOT_TOKEN` in `.env.local` and run `npm run dev
 - The quote is printed first. A real run is refused (exit 2) when the quote is above `--max-spend`. Pass `--partial` to run until the cap instead.
 - `--max-spend` is in dollars. The default is 5. The web UI has a cap field that works the same way.
 - The cap counts list price for calls in flight and the real charge once a call ends, so a run does not go over it.
-- All ten signals cost $0.1765 per account at list price. 25 accounts is $4.41, 100 accounts is $17.65. Switch a signal off in the config to drop its cost.
+- All ten signals cost $0.1720 per account at list price. 25 accounts is $4.30, 100 accounts is $17.20. Switch a signal off in the config to drop its cost.
 - A failed call is not charged. A call still running when waiting stops is `pending`. Run the same command again inside the freshness window (`freshnessWindow` in the config, a week by default) and finished calls replay at no charge.
 
 ## Deploy
@@ -139,13 +138,13 @@ Job ids and prices are from the public looot catalog, read 2026-10-10. Prices ar
 | SEO movement | DataForSEO | `keywords.domain.overview` | `dataforseo-dataforseo-labs-google-domain-rank-overview-live-ai` | $0.0120 |
 | Web traffic | Datagma | `company.traffic` | `datagma-website-traffic` | $0.06532 |
 | Google ads | Scrape Creators | `google.company.ads` | `scrapecreators-google-company-ads` | $0.00188 |
-| LinkedIn ads | Adyntel | `ads.linkedin.search` | `adyntel-linkedin` | $0.00642 |
+| LinkedIn ads | Scrape Creators | `ads.linkedin.search` | `scrapecreators-linkedin-ads-search` | $0.00188 |
 | Reddit mentions | Scrape Creators | `reddit.post.search` | `scrapecreators-reddit-search` | $0.00188 |
 | Headcount growth | CompanyEnrich | `company.workforce` | `companyenrich-companies-workforce` | $0.0490 |
 
-All ten together cost $0.1765 per account at list price. A typical run of 25 accounts is $4.41 and 100 accounts is $17.65. Turn a signal off in the config to drop its cost (web traffic and headcount are $0.114 of the $0.1765).
+All ten together cost $0.1720 per account at list price. A typical run of 25 accounts is $4.30 and 100 accounts is $17.20. Turn a signal off in the config to drop its cost (web traffic and headcount are $0.114 of the $0.1720).
 
-The LinkedIn ads row was priced from the catalog on 2026-10-10 but `adyntel-linkedin` no longer answers on the live catalog, so that signal is skipped until the endpoint id is updated. Others in the catalog that search LinkedIn ads: `scrapecreators-linkedin-ads-search`, `searchapi-io-linkedin-ad-library`. Their response shapes have not been checked against the parser.
+LinkedIn ads moved on 2026-10-10. `adyntel-linkedin` returns 404 on the live catalog, so the signal now runs `scrapecreators-linkedin-ads-search` at $0.00188 per call. It searches by company name, so the app sends the first label of the domain (`acme.com` becomes `acme`), which can match the wrong company for common words. The response shape has not been checked against a real run, so the signal stays marked unverified.
 
 ## How a score is built
 
@@ -175,7 +174,7 @@ Messages are quoted from the code. The CLI prints them as shown. Messages that b
 | `Run <id> is blocked.` or status `failed` with the error code looot gave | A call was blocked or failed. It is counted in "calls failed" and not charged. | Read the code in the report, then retry. |
 | `Run <id> is queued.` / `running` / `pending_provider`, shown as `pending` | The provider had not finished when waiting stopped (60 s). Not a failure. | Run the same command again in the same window. |
 | `unreadable` next to a signal (status `parse_error`) | The response did not match what the parser expects. | See "How to file an issue". |
-| `Live price unreadable for <endpoint>. Those calls will be skipped.` | The public catalog has no readable call price for that endpoint. On 2026-10-10 this was `adyntel-linkedin`. | Use `--offline` for the dated prices, or turn the signal off in the config. |
+| `Source unavailable: <endpoint> has no readable price in the catalog.` | The public catalog has no readable call price for that endpoint, so the calls are skipped and the signal scores zero. | Use `--offline` for the dated prices, or turn the signal off in the config. |
 | `Refused: the quote is above the cap. Raise --max-spend, score fewer accounts, or pass --partial to run until the cap.` | The quote is above `--max-spend`. Exit code 2. | Do what it says. |
 | `Unknown option --x. Run with --help.` | A flag typo. The CLI stops so a typo never runs with defaults. | Fix the flag. |
 

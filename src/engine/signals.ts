@@ -48,6 +48,11 @@ function clip(s: string | undefined, n = 140): string | undefined {
   return s.length > n ? `${s.slice(0, n - 1)}...` : s;
 }
 
+/** "acme.co.uk" becomes "acme". The LinkedIn ad search takes a company name, so this is a guess that works for most brands. */
+export function companyNameOf(domain: string): string {
+  return domain.replace(/^www\./, "").split(".")[0] ?? domain;
+}
+
 const HIRING = { id: "hiring", category: "hiring", provider: "predictleads" } as const;
 const FUNDING = { id: "funding", category: "funding", provider: "predictleads" } as const;
 const NEWS = { id: "news", category: "news", provider: "predictleads" } as const;
@@ -55,7 +60,7 @@ const TECH = { id: "tech", category: "tech", provider: "predictleads" } as const
 const SEO = { id: "seo", category: "seo", provider: "dataforseo" } as const;
 const TRAFFIC = { id: "traffic", category: "traffic", provider: "datagma" } as const;
 const ADS_G = { id: "ads_google", category: "ads", provider: "scrapecreators" } as const;
-const ADS_L = { id: "ads_linkedin", category: "ads", provider: "adyntel" } as const;
+const ADS_L = { id: "ads_linkedin", category: "ads", provider: "scrapecreators" } as const;
 const REDDIT = { id: "social_reddit", category: "social", provider: "scrapecreators" } as const;
 const HEAD = { id: "headcount", category: "headcount", provider: "companyenrich" } as const;
 
@@ -216,14 +221,15 @@ export const SIGNALS: SignalDef[] = [
     label: "LinkedIn ads",
     noun: "ads running",
     jobId: "ads.linkedin.search",
-    endpointId: "adyntel-linkedin",
-    fallbackMicros: 6_420,
+    endpointId: "scrapecreators-linkedin-ads-search",
+    fallbackMicros: 1_880,
     shapeVerified: false,
-    buildInput: (domain) => ({ company_domain: domain, live_ads: true }),
+    // The endpoint searches by company name, not domain, so the name is the first label of the domain.
+    buildInput: (domain) => ({ company: companyNameOf(domain) }),
     parse(result, ctx) {
       const events = rowsOf(result, ["ads", "data", "results"]).map((raw) => {
         const r = flat(raw);
-        return event(ADS_L, { date: dateOf(r, "start_date", "first_seen", "posted_at") ?? ctx.now.toISOString(), title: `LinkedIn ${str(r, "creative_type", "type") ?? "ad"}`, detail: clip(str(r, "commentary", "headline")), url: str(r, "url"), relevant: true });
+        return event(ADS_L, { date: dateOf(r, "start_date", "startDate", "first_seen", "posted_at") ?? ctx.now.toISOString(), title: `LinkedIn ${str(r, "adType", "creative_type", "type") ?? "ad"}`, detail: clip(str(r, "headline", "description", "commentary")), url: str(r, "url", "adUrl"), relevant: true });
       });
       return { events };
     },

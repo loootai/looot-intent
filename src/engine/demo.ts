@@ -1,3 +1,4 @@
+import { companyNameOf } from "./signals";
 import type { Runner } from "./looot";
 import type { Snapshots } from "./types";
 
@@ -80,8 +81,8 @@ function bodyFor(endpointId: string, p: Profile): unknown {
       return { siteOverview: { visits: Math.round(p.trafficBase * (1 + p.trafficGrowth)), globalRank: 120_000 } };
     case "scrapecreators-google-company-ads":
       return { ads: Array.from({ length: p.adsGoogle }, (_, i) => ({ creativeId: `cr_${i}`, format: i % 2 ? "video" : "text", firstShown: daysAgo(2 + i * 6), headline: `Ad copy ${i + 1}` })) };
-    case "adyntel-linkedin":
-      return { ads: Array.from({ length: p.adsLinkedin }, (_, i) => ({ ad_id: `li_${i}`, advertiser: p.domain, creative_type: "single_image", commentary: `Sponsored post ${i + 1}`, start_date: daysAgo(3 + i * 7) })) };
+    case "scrapecreators-linkedin-ads-search":
+      return { ads: Array.from({ length: p.adsLinkedin }, (_, i) => ({ ad_id: `li_${i}`, advertiser: p.domain, adType: "single_image", headline: `Sponsored post ${i + 1}`, startDate: daysAgo(3 + i * 7) })) };
     case "scrapecreators-reddit-search":
       return { posts: Array.from({ length: p.reddit }, (_, i) => ({ title: `Anyone using ${p.domain.split(".")[0]}?`, subreddit: i % 2 ? "sales" : "saas", created_utc: Math.floor((DEMO_NOW.getTime() - (2 + i * 5) * DAY) / 1000), url: `https://reddit.example/${i}` })) };
     case "companyenrich-companies-workforce":
@@ -97,7 +98,7 @@ export function demoRunner(): Runner {
   return {
     async runAndWait(endpointId, input, idempotencyKey) {
       const raw = String(input.company_id_or_domain ?? input.target ?? input.domain ?? input.company_domain ?? String(input.query ?? "").replace(/"/g, ""));
-      const p = byDomain.get(raw);
+      const p = byDomain.get(raw) ?? PROFILES.find((x) => typeof input.company === "string" && companyNameOf(x.domain) === input.company);
       // A domain outside the sample set has no recorded signals.
       return { runId: `demo_${idempotencyKey.split(":").slice(2, 4).join("_")}`, status: "completed", result: p ? bodyFor(endpointId, p) : { data: [] }, actualCost: 0 };
     },

@@ -108,7 +108,7 @@ describe("failure handling", () => {
     expect(result.accounts[0].pendingCount).toBe(1);
   });
   it("records a failed call at the charge looot reports and carries on", async () => {
-    const { looot } = recorder((id) => (id === "adyntel-linkedin" ? { runId: "r", status: "failed", actualCost: 0, error: { code: "upstream_error", message: "x" } } : done(0.01)));
+    const { looot } = recorder((id) => (id === "scrapecreators-linkedin-ads-search" ? { runId: "r", status: "failed", actualCost: 0, error: { code: "upstream_error", message: "x" } } : done(0.01)));
     const { result } = await runIntent({ ...base, domains: ["a.com"], looot, capMicros: 5_000_000 });
     expect(result.failedCalls).toBe(1);
     expect(result.spentMicros).toBe(9 * 10_000);

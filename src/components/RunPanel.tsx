@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { Quote } from "@/engine/types";
 import { usd, usdPrecise } from "@/engine/money";
+import { StatusChip } from "./chips";
 
 interface QuoteReply {
   quote: Quote;
@@ -97,7 +98,7 @@ export function RunPanel({ initialDomains, initialIcp, demo, canRun }: { initial
             <tbody>
               {reply.quote.lines.map((l) => (
                 <tr key={l.signalId} className="border-t border-line">
-                  <td className="py-1 pr-3">{l.label}</td><td className="py-1 pr-3 text-mute">{l.provider}</td><td className="num py-1 pr-3 text-mute">{l.jobId}</td>
+                  <td className="py-1 pr-3">{l.label}{reply.unpriced.includes(l.endpointId) && <> <StatusChip status="skipped_price" /></>}</td><td className="py-1 pr-3 text-mute">{l.provider}</td><td className="num py-1 pr-3 text-mute">{l.jobId}</td>
                   <td className="num py-1 pr-3 text-right">{usdPrecise(l.priceMicros)}</td><td className="num py-1 pr-3 text-right">{l.calls}</td><td className="num py-1 text-right">{usdPrecise(l.totalMicros)}</td>
                 </tr>
               ))}
@@ -110,7 +111,7 @@ export function RunPanel({ initialDomains, initialIcp, demo, canRun }: { initial
             {!fresh && <span className="ml-2 text-amber">The list changed. Get a new quote.</span>}
           </p>
           {reply.rejected.length > 0 && <p className="text-12 text-mute">Skipped, not domains: {reply.rejected.slice(0, 5).join(", ")}</p>}
-          {reply.unpriced.length > 0 && <p className="text-12 text-high">Live price unreadable for {reply.unpriced.join(", ")}. Those calls will be skipped.</p>}
+          {reply.unpriced.length > 0 && <p role="status" className="text-12 text-amber">Source unavailable: {reply.unpriced.join(", ")} has no readable price in the looot catalog. Those calls will be skipped and the signal scores zero.</p>}
         </div>
       )}
     </section>

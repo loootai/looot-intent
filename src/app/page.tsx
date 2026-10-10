@@ -2,6 +2,7 @@ import { CostPanel } from "@/components/CostPanel";
 import { RankedTable } from "@/components/RankedTable";
 import { RunPanel } from "@/components/RunPanel";
 import { usd } from "@/engine/money";
+import { SIGNAL_BY_ID } from "@/engine/signals";
 import { appConfig, canRunLive, getState, isDemo } from "@/server/runtime";
 
 export const dynamic = "force-dynamic";
@@ -10,6 +11,7 @@ export default async function Home() {
   const { run } = await getState();
   const cfg = appConfig();
   const demo = isDemo();
+  const unavailable = run ? [...new Set(run.accounts.flatMap((a) => a.breakdown.filter((b) => b.status === "skipped_price").map((b) => SIGNAL_BY_ID[b.signalId].label)))] : [];
   const initialDomains = run ? run.accounts.map((a) => a.domain).join("\n") : "";
   return (
     <div className="grid grid-cols-1 gap-6">
@@ -28,6 +30,11 @@ export default async function Home() {
             <span>{usd(run.spentMicros)} spent{run.demo ? " (demo)" : ""}</span>
             <span>Stages: aware at {cfg.stages.aware}, considering at {cfg.stages.considering}, deciding at {cfg.stages.deciding}</span>
           </div>
+          {unavailable.length > 0 && (
+            <p role="status" className="rounded-panel border border-line-strong bg-amber-soft px-3 py-2 text-13 text-amber">
+              Source unavailable: {unavailable.join(", ")}. The looot catalog has no readable price for the endpoint, so those calls were not made and the signal scored zero for every account.
+            </p>
+          )}
           <RankedTable accounts={run.accounts} />
           <CostPanel run={run} />
         </>

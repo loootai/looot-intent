@@ -36,7 +36,7 @@ export function strengthOf(result: SignalResult, cfg: IntentConfig["signals"][Si
   const def = SIGNAL_BY_ID[result.signalId];
   if (result.status === "pending") return { strength: 0, summary: "Still running at the provider. Re-run to collect it, the call is not charged twice." };
   if (result.status === "skipped_cap") return { strength: 0, summary: "Skipped: the spend cap would have been passed." };
-  if (result.status === "skipped_price") return { strength: 0, summary: "Skipped: the live price could not be read." };
+  if (result.status === "skipped_price") return { strength: 0, summary: "Source unavailable. looot's catalog has no readable price for this endpoint, so the call was not made." };
   if (result.status === "failed") return { strength: 0, summary: `Failed${result.errorCode ? ` (${result.errorCode})` : ""}. Not charged.` };
   if (result.status === "parse_error") return { strength: 0, summary: "The response did not match the expected shape." };
 

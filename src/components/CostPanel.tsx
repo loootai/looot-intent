@@ -4,14 +4,15 @@ import { Bar, StatusChip } from "./chips";
 
 /** What the run cost: quote against spend and cap, and the spend per signal and provider. */
 export function CostPanel({ run }: { run: RunResult }) {
-  const per = new Map<SignalId, { cost: number; ok: number; pending: number; failed: number; skipped: number }>();
+  const per = new Map<SignalId, { cost: number; ok: number; pending: number; failed: number; skipped: number; unavailable: number }>();
   for (const a of run.accounts) {
     for (const b of a.breakdown) {
-      const x = per.get(b.signalId) ?? { cost: 0, ok: 0, pending: 0, failed: 0, skipped: 0 };
+      const x = per.get(b.signalId) ?? { cost: 0, ok: 0, pending: 0, failed: 0, skipped: 0, unavailable: 0 };
       x.cost += b.costMicros;
       if (b.status === "ok") x.ok += 1;
       else if (b.status === "pending") x.pending += 1;
-      else if (b.status === "skipped_cap" || b.status === "skipped_price") x.skipped += 1;
+      else if (b.status === "skipped_price") x.unavailable += 1;
+      else if (b.status === "skipped_cap") x.skipped += 1;
       else x.failed += 1;
       per.set(b.signalId, x);
     }
@@ -47,6 +48,7 @@ export function CostPanel({ run }: { run: RunResult }) {
                   <td className="num py-1 pr-3 text-right">{usdPrecise(l.priceMicros)}</td><td className="num py-1 pr-3 text-right">{x?.ok ?? 0}/{l.calls}</td>
                   <td className="py-1 pr-3 text-mute">
                     {x?.pending ? <span className="mr-1"><StatusChip status="pending" /> {x.pending}</span> : null}
+                    {x?.unavailable ? <span className="mr-1"><StatusChip status="skipped_price" /> {x.unavailable}</span> : null}
                     {x?.failed ? <span className="mr-1"><StatusChip status="failed" /> {x.failed}</span> : null}
                     {x?.skipped ? <span><StatusChip status="skipped_cap" /> {x.skipped}</span> : null}
                   </td>

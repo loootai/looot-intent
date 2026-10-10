@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "./config";
-import { SIGNAL_BY_ID, SIGNALS, matchesAny } from "./signals";
+import { SIGNAL_BY_ID, SIGNALS, companyNameOf, matchesAny } from "./signals";
 
 const cfg = loadConfig();
 const ctx = { icp: cfg.icp, now: new Date("2026-10-10T09:00:00Z") };
@@ -16,8 +16,24 @@ describe("signal catalog", () => {
   it("sends the domain under the field name each provider documents", () => {
     expect(SIGNAL_BY_ID.hiring.buildInput("acme.com")).toMatchObject({ company_id_or_domain: "acme.com" });
     expect(SIGNAL_BY_ID.seo.buildInput("acme.com")).toMatchObject({ target: "acme.com" });
-    expect(SIGNAL_BY_ID.ads_linkedin.buildInput("acme.com")).toMatchObject({ company_domain: "acme.com" });
+    expect(SIGNAL_BY_ID.ads_linkedin.buildInput("acme.com")).toEqual({ company: "acme" });
     expect(SIGNAL_BY_ID.ads_google.buildInput("acme.com")).toEqual({ domain: "acme.com" });
+  });
+});
+
+describe("LinkedIn ads signal", () => {
+  it("runs the live scrapecreators endpoint at its catalog price", () => {
+    expect(SIGNAL_BY_ID.ads_linkedin.endpointId).toBe("scrapecreators-linkedin-ads-search");
+    expect(SIGNAL_BY_ID.ads_linkedin.fallbackMicros).toBe(1_880);
+  });
+  it("takes the company name from the first label of the domain", () => {
+    expect(companyNameOf("www.acme.co.uk")).toBe("acme");
+    expect(companyNameOf("acme.com")).toBe("acme");
+  });
+  it("reads adType, headline and startDate from the documented ad fields", () => {
+    const parsed = SIGNAL_BY_ID.ads_linkedin.parse({ ads: [{ id: "1", adType: "video", headline: "Hello", startDate: "2026-10-01" }] }, ctx);
+    expect(parsed.events).toHaveLength(1);
+    expect(parsed.events[0]).toMatchObject({ title: "LinkedIn video", detail: "Hello", date: "2026-10-01T00:00:00.000Z" });
   });
 });
 

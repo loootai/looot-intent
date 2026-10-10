@@ -38,7 +38,7 @@ describe("main", () => {
     const text = lines.join("\n");
     expect(code).toBe(0);
     expect(text).toContain("2 accounts, 10 signals each");
-    expect(text).toContain("Quoted $0.35 at list price");
+    expect(text).toContain("Quoted $0.34 at list price");
     expect(text).toContain("no run was made");
     expect(fs.existsSync(path.join(dir, "state"))).toBe(false);
   });

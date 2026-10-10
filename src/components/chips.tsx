@@ -13,12 +13,12 @@ export function StageChip({ stage, className }: { stage: Stage; className?: stri
   return <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-12 font-medium capitalize", STAGE_STYLE[stage], className)}>{stage}</span>;
 }
 
-const STATUS_LABEL: Record<CallStatus, string> = { ok: "ok", failed: "failed", pending: "pending", skipped_cap: "skipped, cap", skipped_price: "skipped, price", parse_error: "unreadable" };
+const STATUS_LABEL: Record<CallStatus, string> = { ok: "ok", failed: "failed", pending: "pending", skipped_cap: "skipped, cap", skipped_price: "source unavailable", parse_error: "unreadable" };
 
 /** A call status. Only the ones that need attention are drawn loud. */
 export function StatusChip({ status }: { status: CallStatus }) {
   if (status === "ok") return <span className="text-12 text-faint">ok</span>;
-  const tone = status === "pending" ? "bg-amber-soft text-amber" : "bg-high-soft text-high";
+  const tone = status === "pending" || status === "skipped_price" ? "bg-amber-soft text-amber" : "bg-high-soft text-high";
   return <span className={cn("rounded-full px-1.5 py-0.5 text-11 font-medium", tone)}>{STATUS_LABEL[status]}</span>;
 }
 
