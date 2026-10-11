@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Loader2 } from "lucide-react";
 import type { Quote } from "@/engine/types";
 import { usd, usdPrecise } from "@/engine/money";
+import { adminFetch } from "./adminFetch";
 import { StatusChip } from "./chips";
 
 interface QuoteReply {
@@ -15,26 +16,24 @@ interface QuoteReply {
 }
 
 /** Domains, ICP and a spend cap in. Shows the quote before anything is bought, then runs the engine. */
-export function RunPanel({ initialDomains, initialIcp, demo, canRun }: { initialDomains: string; initialIcp: string; demo: boolean; canRun: boolean }) {
+export function RunPanel({ initialDomains, initialIcp, demo, canRun, maxRunUsd }: { initialDomains: string; initialIcp: string; demo: boolean; canRun: boolean; maxRunUsd: number }) {
   const router = useRouter();
   const [domains, setDomains] = useState(initialDomains);
   const [icp, setIcp] = useState(initialIcp);
-  const [cap, setCap] = useState("5");
   const [reply, setReply] = useState<QuoteReply | null>(null);
   const [quotedFor, setQuotedFor] = useState("");
   const [busy, setBusy] = useState<"quote" | "run" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const capNum = Number(cap);
   const quoteTotal = reply?.quote.totalMicros ?? 0;
   const fresh = reply !== null && quotedFor === domains;
-  const overCap = fresh && quoteTotal > capNum * 1_000_000;
+  const overCap = fresh && quoteTotal > maxRunUsd * 1_000_000;
 
   async function getQuote() {
     setBusy("quote");
     setError(null);
     try {
-      const res = await fetch("/api/quote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domains }) });
+      const res = await adminFetch("/api/quote", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domains }) });
       if (!res.ok) throw new Error(((await res.json()) as { error?: string }).error ?? `HTTP ${res.status}`);
       setReply((await res.json()) as QuoteReply);
       setQuotedFor(domains);
@@ -49,7 +48,7 @@ export function RunPanel({ initialDomains, initialIcp, demo, canRun }: { initial
     setBusy("run");
     setError(null);
     try {
-      const res = await fetch("/api/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domains, icp, capUsd: capNum }) });
+      const res = await adminFetch("/api/run", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ domains, icp, confirmedMaxMicros: quoteTotal }) });
       const body = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
       router.refresh();
@@ -73,14 +72,13 @@ export function RunPanel({ initialDomains, initialIcp, demo, canRun }: { initial
           <span className="text-11 text-faint">Job title words, technologies and news categories that count fully are in config/intent.config.json.</span>
         </label>
         <div className="grid content-start gap-3 lg:w-48">
-          <label className="grid gap-1">
-            <span className="text-12 font-medium text-mute">Spend cap, USD</span>
-            <input value={cap} onChange={(e) => setCap(e.target.value)} inputMode="decimal" className="num w-full rounded-control border border-line-strong bg-page px-2 py-1.5 text-13" />
-          </label>
+          <p className="text-12 text-mute">
+            Per-run cap set by the server: <span className="num">{usd(maxRunUsd * 1_000_000)}</span>. A run is refused if its quote is higher.
+          </p>
           <button type="button" onClick={getQuote} disabled={busy !== null} className="rounded-control border border-line-strong bg-panel px-3 py-1.5 font-medium hover:bg-hover disabled:opacity-50">
             {busy === "quote" ? <Loader2 className="mx-auto size-4 animate-spin" /> : "Get quote"}
           </button>
-          <button type="button" onClick={run} disabled={busy !== null || !fresh || overCap || !Number.isFinite(capNum) || (!demo && !canRun)} className="rounded-control bg-brand px-3 py-1.5 font-medium text-brand-ink hover:opacity-90 disabled:opacity-40">
+          <button type="button" onClick={run} disabled={busy !== null || !fresh || overCap || (!demo && !canRun)} className="rounded-control bg-brand px-3 py-1.5 font-medium text-brand-ink hover:opacity-90 disabled:opacity-40">
             {busy === "run" ? <Loader2 className="mx-auto size-4 animate-spin" /> : demo ? "Run on sample data" : "Run"}
           </button>
         </div>
@@ -107,7 +105,7 @@ export function RunPanel({ initialDomains, initialIcp, demo, canRun }: { initial
           <p className="mt-2 text-13">
             <strong className="num">{usd(quoteTotal)}</strong> for {reply.quote.accounts} accounts at list price, {usdPrecise(reply.quote.perAccountMicros)} each. Prices {reply.quote.priceSource === "catalog" ? "read from the public catalog" : "from the dated fallback"}.
             {demo && " Demo mode charges nothing."}
-            {overCap && <span className="ml-2 text-high">Above your {usd(capNum * 1_000_000)} cap. Raise the cap or remove accounts.</span>}
+            {overCap && <span className="ml-2 text-high">Above the server cap of {usd(maxRunUsd * 1_000_000)}. Remove accounts.</span>}
             {!fresh && <span className="ml-2 text-amber">The list changed. Get a new quote.</span>}
           </p>
           {reply.rejected.length > 0 && <p className="text-12 text-mute">Skipped, not domains: {reply.rejected.slice(0, 5).join(", ")}</p>}

@@ -6,6 +6,8 @@
 
 An open-source alternative to [6sense](https://6sense.com) for account intent and buying-stage scoring. 6sense publishes no price for paid plans and has a free plan with 50 credits a month; the only paid-plan figure found is a third-party estimate of about $25,000 a year (read 2026-10-10), not a 6sense number. looot-intent scores a list of company domains on one [looot](https://looot.ai) key and shows what each score cost.
 
+> **Security notice.** Versions 0.1.3 and older had no admin sign-in. Anyone who could reach a deployed copy could read the saved run and start paid looot runs on your token. If you run v0.1.3 or older on a reachable host, upgrade to v0.1.4 and set `LOOOT_INTENT_ADMIN_PASSWORD`. See [Securing a deployment](#securing-a-deployment).
+
 ![Ranked accounts, light](docs/screenshots/dashboard-light.png)
 
 ## What it does
@@ -42,7 +44,7 @@ npm install --ignore-scripts
 npm run demo
 ```
 
-Open http://localhost:3271. The demo uses generated accounts on the reserved `.example` domain, needs no token, makes no network call and costs nothing. Stop it with Ctrl+C.
+Open http://localhost:3271. The demo has no sign-in and shows a "Demo, no sign-in" badge. It refuses to start if `LOOOT_TOKEN` is set or a saved run exists, unless you also set an admin password. The demo uses generated accounts on the reserved `.example` domain, needs no token, makes no network call and costs nothing. Stop it with Ctrl+C.
 
 Prefer the terminal? `npm run intent -- --demo` prints the same ranking and writes the reports to `./out`.
 
@@ -57,6 +59,11 @@ cp .env.example .env.local     # web UI only
 | Variable | Needed | What it does | Where to get it |
 | --- | --- | --- | --- |
 | `LOOOT_TOKEN` | Required for real runs | Your looot key. Not needed for `--demo` or `--dry-run`. | looot Settings > Agent tokens, or `looot login` |
+| `LOOOT_INTENT_ADMIN_PASSWORD` | Required for the web UI outside the demo | Admin password, 12 characters or more. Without it every page and API route except `/login` and `/api/health` is closed and `/login` shows a setup page. The CLI does not use it. | Choose one |
+| `LOOOT_INTENT_ADMIN_PASSWORD_HASH` | Alternative | `scrypt$salt$key` instead of the plain password. Wins if both are set. | `npm run hash-password -- 'your password'` |
+| `LOOOT_INTENT_SESSION_SECRET` | Optional | Key that signs session cookies. Default: derived from the password, so changing the password signs everyone out. | `openssl rand -hex 32` |
+| `LOOOT_INTENT_MAX_RUN_USD` | Optional | Most one web run may spend, in dollars. Default 5. The browser cannot raise it. | Any number above 0 |
+| `LOOOT_INTENT_COOKIE_SECURE` | Optional | Set to `0` only to test over plain http in production mode. | Leave unset |
 | `LOOOT_API_URL` | Optional | Overrides the API base. Default `https://api.looot.ai`. | Leave unset |
 | `LOOOT_INTENT_CONFIG` | Optional | Path to a scoring config for the web UI. Default `config/intent.config.json`. The CLI takes `--config` instead. | Copy `config/intent.config.json` |
 | `LOOOT_INTENT_DIR` | Optional | Folder for the saved run (`state.json`). Default `.looot-intent` in the working directory. | Any writable folder |
@@ -99,12 +106,12 @@ npm run intent -- examples/accounts.csv --column domain --icp "B2B SaaS, 50 to 5
 
 Results go to `./out` as `intent-<run>.json`, `.csv` and `.md` (change the folder with `--out`, the formats with `--format json,csv,md`). The latest run is also saved to `.looot-intent/state.json`, which the web UI reads and which the next run uses as the growth baseline. Run `npm run intent -- --help` for all flags. Exit codes are 0 done, 1 error, 2 refused (over the cap or no token).
 
-The web UI on a live key: put `LOOOT_TOKEN` in `.env.local` and run `npm run dev` (http://localhost:3000). It has no sign-in.
+The web UI on a live key: put `LOOOT_TOKEN` and `LOOOT_INTENT_ADMIN_PASSWORD` in `.env.local` and run `npm run dev` (http://localhost:3000). It asks for the admin password. Without the password it shows a setup page and nothing else.
 
 ## Spending
 
 - The quote is printed first. A real run is refused (exit 2) when the quote is above `--max-spend`. Pass `--partial` to run until the cap instead.
-- `--max-spend` is in dollars. The default is 5. The web UI has a cap field that works the same way.
+- `--max-spend` is in dollars. The default is 5. The web UI takes its cap from the server (`LOOOT_INTENT_MAX_RUN_USD`, default 5), not from the browser.
 - The cap counts list price for calls in flight and the real charge once a call ends, so a run does not go over it.
 - All ten signals cost $0.1720 per account at list price. 25 accounts is $4.30, 100 accounts is $17.20. Switch a signal off in the config to drop its cost.
 - A failed call is not charged. A call still running when waiting stops is `pending`. Run the same command again inside the freshness window (`freshnessWindow` in the config, a week by default) and finished calls replay at no charge.
@@ -115,15 +122,62 @@ I have not deployed this to Vercel. The steps below follow the code.
 
 1. Push a copy of the repo to your own GitHub account.
 2. In Vercel choose Add New > Project, import the repo. Next.js is detected, there is no `vercel.json`.
-3. Add the environment variable `LOOOT_TOKEN`. Add `LOOOT_INTENT_DIR` too (see below).
+3. Add the environment variables `LOOOT_TOKEN` and `LOOOT_INTENT_ADMIN_PASSWORD` (or `LOOOT_INTENT_ADMIN_PASSWORD_HASH`). Add `LOOOT_INTENT_DIR` too (see below).
 4. Deploy.
 
 Two things to know first.
 
-- The app has no sign-in. Anyone who can open the URL can start a run that spends your balance, up to the cap they type in. Turn on Vercel Deployment Protection, or keep the app on your own machine.
+- Without `LOOOT_INTENT_ADMIN_PASSWORD` the app serves no admin route. It shows the setup page at `/login` and nothing else. Set the password before you put the URL anywhere. See [Securing a deployment](#securing-a-deployment).
 - A live run saves its result with `writeState` after the calls are paid. The default folder is `.looot-intent` next to the app, which a serverless function may not be able to write. Set `LOOOT_INTENT_DIR` to a writable folder. On Vercel that is `/tmp`, which does not persist between invocations. For history across runs use the CLI, or a host with a persistent disk.
 
 There is no scheduled workflow in this repo.
+
+## Securing a deployment
+
+Versions 0.1.3 and older had no admin authentication. From 0.1.4 every route is either public on purpose or admin, and the admin routes are closed unless you set a password.
+
+### Route map
+
+The routes are listed in `src/lib/auth/routes.ts`. A test reads `src/app` and fails if a route is missing from that file or if an admin route does not call the gate. A path that is not listed is treated as admin.
+
+| Kind | Count | Routes |
+| --- | --- | --- |
+| Public by design | 4 routes | `/login`, `/api/auth/login`, `/api/auth/logout`, `/api/health` |
+| Admin pages | 2 | `/` (ranking, quote and run panel), `/accounts/[domain]` |
+| Admin API | 2 | `/api/quote` (reads the public catalog, free), `/api/run` (paid looot run) |
+
+There are no server actions and no export routes. The CLI runs on your own machine and does not go through the web gate.
+
+### How the gate works
+
+- `src/proxy.ts` checks every request. Each admin page, the root layout and each admin route handler checks again with the same function, so a path the matcher misses is still closed.
+- Not set up (no password, and not a clean demo): admin routes answer 503, admin pages redirect to `/login`, which says what to set. Nothing stored is rendered.
+- Demo (`npm run demo`): no sign-in, a "Demo, no sign-in" badge, sample data only. It refuses to open when `LOOOT_TOKEN` is set or a saved run exists, unless an admin password is also set.
+- Sign-in: constant-time password comparison. A session is a signed token in an httpOnly, SameSite=Lax cookie, Secure in production, valid for 8 hours. 5 wrong passwords from one address lock that address for 15 minutes. 40 wrong passwords from anywhere lock sign-in for everyone for 15 minutes, which also lets an attacker delay you, so use a long password.
+- State-changing admin requests need a same-origin `Origin` header and the per-session token in `x-intent-csrf`. The layout puts the token in a meta tag and the app's own fetch calls send it.
+- Admin responses carry `Cache-Control: no-store`. All responses carry a Content-Security-Policy (`frame-ancestors 'none'`), `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer`. The CSP allows inline scripts because Next.js needs them.
+
+### Spending
+
+`POST /api/run` takes its ceiling from the server: `LOOOT_INTENT_MAX_RUN_USD`, default 5. The browser sends the quote total it saw as `confirmedMaxMicros`, which can only lower the ceiling. The server prices the list again before any paid call and refuses when that price is above the server cap or above the confirmed quote. A `capUsd` field in the body is ignored. Each session may start 6 runs in 10 minutes, then gets a 429. The limiter is in memory, so behind several instances also rate limit at your proxy.
+
+### Setup
+
+```bash
+export LOOOT_INTENT_ADMIN_PASSWORD='a password of 12 or more characters'
+# or keep it out of the environment as plain text:
+npm run hash-password -- 'a password of 12 or more characters'   # prints LOOOT_INTENT_ADMIN_PASSWORD_HASH=...
+```
+
+Rotate the password by changing the variable and restarting. Changing it signs every session out. The saved run (`.looot-intent/state.json`, or `LOOOT_INTENT_DIR`) is a plain file on the server's disk. The cookie is `Secure` in production, so use https.
+
+### The stronger option
+
+A shared password is the floor. For anything people other than you can reach, put the app behind a VPN, a private network or an identity-aware proxy (Cloudflare Access, Tailscale, Google IAP, oauth2-proxy), and keep the app's password on as well.
+
+### Not covered
+
+No per-user accounts, no roles, no record of who signed in. The app has one admin.
 
 ## Signals
 

@@ -1,3 +1,4 @@
+import { requireAdminPage } from "@/lib/auth/guard";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -14,6 +15,7 @@ export async function generateMetadata({ params }: { params: Promise<{ domain: s
 }
 
 export default async function AccountPage({ params }: { params: Promise<{ domain: string }> }) {
+  await requireAdminPage();
   const domain = decodeURIComponent((await params).domain);
   const { run } = await getState();
   const rank = run ? run.accounts.findIndex((a) => a.domain === domain) : -1;

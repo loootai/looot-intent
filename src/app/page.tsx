@@ -1,13 +1,16 @@
+import { requireAdminPage } from "@/lib/auth/guard";
 import { CostPanel } from "@/components/CostPanel";
 import { RankedTable } from "@/components/RankedTable";
 import { RunPanel } from "@/components/RunPanel";
 import { usd } from "@/engine/money";
 import { SIGNAL_BY_ID } from "@/engine/signals";
+import { maxRunUsd } from "@/lib/auth/policy";
 import { appConfig, canRunLive, getState, isDemo } from "@/server/runtime";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  await requireAdminPage();
   const { run } = await getState();
   const cfg = appConfig();
   const demo = isDemo();
@@ -21,7 +24,7 @@ export default async function Home() {
           Score a list of company domains for buying intent. Each score is built from signals looot fetched from named providers, with the weight and cost of each one shown. The quote comes before the run.
         </p>
       </div>
-      <RunPanel initialDomains={initialDomains} initialIcp={run?.icp ?? cfg.icp.description} demo={demo} canRun={canRunLive()} />
+      <RunPanel initialDomains={initialDomains} initialIcp={run?.icp ?? cfg.icp.description} demo={demo} canRun={canRunLive()} maxRunUsd={maxRunUsd()} />
       {run ? (
         <>
           <div className="flex flex-wrap items-baseline gap-x-6 gap-y-1 text-12 text-mute">

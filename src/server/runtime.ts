@@ -5,6 +5,7 @@ import { fetchPrices, hasLoootToken, loootFromEnv } from "@/engine/looot";
 import { toMicros } from "@/engine/money";
 import { FALLBACK_PRICES } from "@/engine/signals";
 import { readState, writeState, type State } from "@/engine/state";
+import { maxRunUsd } from "@/lib/auth/policy";
 import type { Quote, RunResult } from "@/engine/types";
 
 /** true when the app runs on sample data: no token, no network, no cost. */
@@ -53,14 +54,19 @@ export async function quoteFor(domainText: string): Promise<QuoteReply> {
   return { quote: buildQuote(domains, cfg, live.prices, live.source), rejected, domains, unpriced: live.unread };
 }
 
-/** Runs the engine for the UI and saves the result. The UI never sees the token. */
-export async function runFor(input: { domains: string; icp?: string; capUsd: number }): Promise<RunResult> {
+/**
+ * Runs the engine for the UI and saves the result. The UI never sees the token.
+ * The ceiling is the server's LOOOT_INTENT_MAX_RUN_USD, or less if the caller confirmed a smaller quote. The caller cannot raise it.
+ * The server prices the list again and refuses before any paid call when that price is above the ceiling or above the quote the caller confirmed.
+ */
+export async function runFor(input: { domains: string; icp?: string; confirmedMaxMicros: number }): Promise<RunResult> {
   const { domains } = parseDomains(input.domains);
   if (domains.length === 0) throw new Error("No valid domains.");
   if (domains.length > 500) throw new Error("At most 500 domains per run.");
   const cfg = appConfig();
   if (input.icp?.trim()) cfg.icp.description = input.icp.trim();
-  const capMicros = toMicros(input.capUsd);
+  const serverCapMicros = toMicros(maxRunUsd());
+  const capMicros = Math.min(serverCapMicros, input.confirmedMaxMicros);
   if (isDemo()) {
     const { result, snapshots } = await runIntent({ config: cfg, domains, looot: demoRunner(), prices: FALLBACK_PRICES, capMicros, snapshots: globalThis.__intentDemoState?.snapshots ?? demoSnapshots(), now: DEMO_NOW, demo: true });
     globalThis.__intentDemoState = { run: result, snapshots };
@@ -69,7 +75,9 @@ export async function runFor(input: { domains: string; icp?: string; capUsd: num
   const looot = loootFromEnv();
   const live = await fetchPrices(FALLBACK_PRICES);
   const quote = buildQuote(domains, cfg, live.prices, live.source);
-  if (quote.totalMicros > capMicros) throw new Error(`The quote ($${(quote.totalMicros / 1e6).toFixed(2)}) is above the cap ($${input.capUsd.toFixed(2)}). Raise the cap or score fewer accounts.`);
+  const dollars = (m: number) => `$${(m / 1e6).toFixed(2)}`;
+  if (quote.totalMicros > input.confirmedMaxMicros) throw new Error(`The price now (${dollars(quote.totalMicros)}) is above the quote you confirmed (${dollars(input.confirmedMaxMicros)}). Get a new quote.`);
+  if (quote.totalMicros > serverCapMicros) throw new Error(`The quote (${dollars(quote.totalMicros)}) is above this server's per-run cap (${dollars(serverCapMicros)}). Score fewer accounts, or raise LOOOT_INTENT_MAX_RUN_USD on the server.`);
   const state = readState();
   const { result, snapshots } = await runIntent({ config: cfg, domains, looot, prices: live.prices, priceSource: live.source, unpriced: live.unread, capMicros, snapshots: state.snapshots });
   writeState({ run: result, snapshots });

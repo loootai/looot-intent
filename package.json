@@ -6,9 +6,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "demo": "LOOOT_INTENT_DEMO=1 next dev -p 3271",
+    "demo": "node scripts/demoGuard.mjs && LOOOT_INTENT_DEMO=1 next dev -p 3271",
     "build": "next build",
     "start": "next start",
+    "hash-password": "node scripts/hashPassword.mjs",
     "intent": "tsx src/cli/cli.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
