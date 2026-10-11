@@ -6,7 +6,7 @@ import { buildQuote, parseCsvDomains, parseDomains, runIntent } from "../engine/
 import { LoootError, fetchPrices, loootFromEnv } from "../engine/looot";
 import { toMicros, usd, usdPrecise } from "../engine/money";
 import { toCsv, toJson, toMarkdown } from "../engine/report";
-import { FALLBACK_PRICES } from "../engine/signals";
+import { FALLBACK_PRICES, PRICE_UNITS } from "../engine/signals";
 import { readState, writeState } from "../engine/state";
 import type { Quote } from "../engine/types";
 
@@ -91,8 +91,9 @@ export function parseArgs(argv: string[]): Args {
 }
 
 function quoteTable(q: Quote): string {
-  const rows = q.lines.map((l) => `  ${l.label.padEnd(20)} ${l.provider.padEnd(14)} ${l.jobId.padEnd(26)} ${usdPrecise(l.priceMicros).padStart(9)} x ${String(l.calls).padStart(4)} = ${usdPrecise(l.totalMicros).padStart(9)}`);
-  return [...rows, `  ${"Total".padEnd(20)} ${"".padEnd(14)} ${"".padEnd(26)} ${usdPrecise(q.perAccountMicros).padStart(9)} per account ${usd(q.totalMicros).padStart(9)}`, `  Prices: ${q.priceSource === "catalog" ? "read from the public looot catalog" : "dated fallback in the code"}`].join("\n");
+  const rows = q.lines.map((l) => `  ${l.label.padEnd(26)} ${l.provider.padEnd(14)} ${l.jobId.padEnd(26)} ${usdPrecise(l.priceMicros).padStart(9)} x ${String(l.calls).padStart(4)} = ${usdPrecise(l.totalMicros).padStart(9)}`);
+  const perResult = q.lines.filter((l) => l.unit === "result").map((l) => `  ${l.label}: the price is per result. The app asks for 1 result per account, so ${usdPrecise(l.priceMicros)} is the most one account costs. The catalog says nothing found means no charge.`);
+  return [...rows, `  ${"Total".padEnd(26)} ${"".padEnd(14)} ${"".padEnd(26)} ${usdPrecise(q.perAccountMicros).padStart(9)} per account ${usd(q.totalMicros).padStart(9)}`, ...perResult, `  Prices: ${q.priceSource === "catalog" ? "read from the public looot catalog" : "dated fallback in the code"}`].join("\n");
 }
 
 /** Runs the CLI. Returns the exit code: 0 done, 1 error, 2 refused (over the cap, no token). */
@@ -136,7 +137,7 @@ export async function main(argv: string[], env: Record<string, string | undefine
     let priceSource: Quote["priceSource"] = "fallback";
     let unpriced: string[] = [];
     if (!args.demo && !args.offline) {
-      const live = await fetchPrices(FALLBACK_PRICES);
+      const live = await fetchPrices(FALLBACK_PRICES, { units: PRICE_UNITS });
       prices = live.prices;
       priceSource = live.source;
       unpriced = live.unread;

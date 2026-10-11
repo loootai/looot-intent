@@ -97,7 +97,7 @@ export function RunPanel({ initialDomains, initialIcp, demo, canRun, maxRunUsd }
               {reply.quote.lines.map((l) => (
                 <tr key={l.signalId} className="border-t border-line">
                   <td className="py-1 pr-3">{l.label}{reply.unpriced.includes(l.endpointId) && <> <StatusChip status="skipped_price" /></>}</td><td className="py-1 pr-3 text-mute">{l.provider}</td><td className="num py-1 pr-3 text-mute">{l.jobId}</td>
-                  <td className="num py-1 pr-3 text-right">{usdPrecise(l.priceMicros)}</td><td className="num py-1 pr-3 text-right">{l.calls}</td><td className="num py-1 text-right">{usdPrecise(l.totalMicros)}</td>
+                  <td className="num py-1 pr-3 text-right">{usdPrecise(l.priceMicros)}{l.unit === "result" && <span className="text-faint" title="Priced per result. The app asks for 1 result per account, so this is the most one account costs."> /result</span>}</td><td className="num py-1 pr-3 text-right">{l.calls}</td><td className="num py-1 text-right">{usdPrecise(l.totalMicros)}</td>
                 </tr>
               ))}
             </tbody>

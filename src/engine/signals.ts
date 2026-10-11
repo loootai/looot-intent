@@ -21,6 +21,11 @@ export interface SignalDef {
   endpointId: string;
   /** Price per call in micro-dollars from the public catalog on PRICES_AS_OF. */
   fallbackMicros: number;
+  /**
+   * What the catalog price counts. "call" is a flat price per call. "result" is a price per result, so buildInput must
+   * fix the result limit in code and the quote shows the worst case at that limit.
+   */
+  priceUnit: "call" | "result";
   /** false until someone has checked a real response body against the parser. */
   shapeVerified: boolean;
   buildInput(domain: string): Record<string, unknown>;
@@ -62,6 +67,7 @@ const TRAFFIC = { id: "traffic", category: "traffic", provider: "datagma" } as c
 const ADS_G = { id: "ads_google", category: "ads", provider: "scrapecreators" } as const;
 const ADS_L = { id: "ads_linkedin", category: "ads", provider: "scrapecreators" } as const;
 const REDDIT = { id: "social_reddit", category: "social", provider: "scrapecreators" } as const;
+const INTENT = { id: "intent_topics", category: "intent", provider: "theirstack" } as const;
 const HEAD = { id: "headcount", category: "headcount", provider: "companyenrich" } as const;
 
 /** Every signal the app can fetch. Job ids and prices come from the free looot catalog. */
@@ -73,6 +79,7 @@ export const SIGNALS: SignalDef[] = [
     jobId: "jobs.company",
     endpointId: "predictleads-companies-job-openings",
     fallbackMicros: 10_000,
+    priceUnit: "call",
     shapeVerified: false,
     buildInput: (domain) => ({ company_id_or_domain: domain, active_only: true, limit: 50 }),
     parse(result, ctx) {
@@ -97,6 +104,7 @@ export const SIGNALS: SignalDef[] = [
     jobId: "company.funding",
     endpointId: "predictleads-companies-financing-events",
     fallbackMicros: 10_000,
+    priceUnit: "call",
     shapeVerified: false,
     buildInput: (domain) => ({ company_id_or_domain: domain, limit: 20 }),
     parse(result) {
@@ -117,6 +125,7 @@ export const SIGNALS: SignalDef[] = [
     jobId: "company.news",
     endpointId: "predictleads-companies-news-events",
     fallbackMicros: 10_000,
+    priceUnit: "call",
     shapeVerified: false,
     buildInput: (domain) => ({ company_id_or_domain: domain, limit: 25 }),
     parse(result, ctx) {
@@ -141,6 +150,7 @@ export const SIGNALS: SignalDef[] = [
     jobId: "company.technographics",
     endpointId: "predictleads-companies-technology-detections",
     fallbackMicros: 10_000,
+    priceUnit: "call",
     shapeVerified: false,
     buildInput: (domain) => ({ company_id_or_domain: domain, limit: 100 }),
     parse(result, ctx) {
@@ -170,6 +180,7 @@ export const SIGNALS: SignalDef[] = [
     jobId: "keywords.domain.overview",
     endpointId: "dataforseo-dataforseo-labs-google-domain-rank-overview-live-ai",
     fallbackMicros: 12_000,
+    priceUnit: "call",
     shapeVerified: false,
     buildInput: (domain) => ({ target: domain, language_code: "en", location_name: "United States" }),
     parse(result, ctx) {
@@ -191,6 +202,7 @@ export const SIGNALS: SignalDef[] = [
     jobId: "company.traffic",
     endpointId: "datagma-website-traffic",
     fallbackMicros: 65_320,
+    priceUnit: "call",
     shapeVerified: false,
     buildInput: (domain) => ({ domain }),
     parse(result, ctx) {
@@ -206,6 +218,7 @@ export const SIGNALS: SignalDef[] = [
     jobId: "google.company.ads",
     endpointId: "scrapecreators-google-company-ads",
     fallbackMicros: 1_880,
+    priceUnit: "call",
     shapeVerified: false,
     buildInput: (domain) => ({ domain }),
     parse(result) {
@@ -223,6 +236,7 @@ export const SIGNALS: SignalDef[] = [
     jobId: "ads.linkedin.search",
     endpointId: "scrapecreators-linkedin-ads-search",
     fallbackMicros: 1_880,
+    priceUnit: "call",
     shapeVerified: false,
     // The endpoint searches by company name, not domain, so the name is the first label of the domain.
     buildInput: (domain) => ({ company: companyNameOf(domain) }),
@@ -241,6 +255,7 @@ export const SIGNALS: SignalDef[] = [
     jobId: "reddit.post.search",
     endpointId: "scrapecreators-reddit-search",
     fallbackMicros: 1_880,
+    priceUnit: "call",
     shapeVerified: false,
     buildInput: (domain) => ({ query: `"${domain}"`, sort: "new", timeframe: "month" }),
     parse(result) {
@@ -259,6 +274,7 @@ export const SIGNALS: SignalDef[] = [
     jobId: "company.workforce",
     endpointId: "companyenrich-companies-workforce",
     fallbackMicros: 49_000,
+    priceUnit: "call",
     shapeVerified: false,
     buildInput: (domain) => ({ domain }),
     parse(result, ctx) {
@@ -267,12 +283,61 @@ export const SIGNALS: SignalDef[] = [
       return { events: [event(HEAD, { date: ctx.now.toISOString(), title: `${n.toLocaleString("en-US")} employees observed`, relevant: true })], metric: { name: "employees", value: n, kind: "snapshot" } };
     },
   },
+  {
+    ...INTENT,
+    label: "Third-party buying intent",
+    noun: "intent topics",
+    jobId: "companies.buying-intents",
+    endpointId: "theirstack-companies-buying-intents",
+    fallbackMicros: 98_100,
+    priceUnit: "result",
+    shapeVerified: false,
+    // The catalog price is per result and `limit` counts results, so 1 caps one account at one result. Never taken from the caller.
+    buildInput: (domain) => ({ company_domain: domain, limit: 1 }),
+    parse(result) {
+      const events: SignalEvent[] = [];
+      for (const company of rowsOf(result)) {
+        const nested = INTENT_LIST_KEYS.map((k) => company[k]).find(Array.isArray) as unknown[] | undefined;
+        const rows = nested ? nested.filter(isRec) : [company];
+        for (const raw of rows) {
+          const r = flat(raw);
+          const name = topicName(r);
+          if (!name) continue;
+          const confidence = str(r, "confidence")?.toLowerCase();
+          const jobs = findNumber(r, ["jobs", "num_jobs", "jobs_count", "number_of_jobs", "job_count"]);
+          const first = dateOf(r, "first_date_found", "first_seen_at");
+          const detail = [confidence ? `${confidence} confidence` : undefined, jobs !== undefined ? `${jobs} job post${jobs === 1 ? "" : "s"}` : undefined, first ? `first seen ${first.slice(0, 10)}` : undefined].filter(Boolean).join(", ");
+          events.push(event(INTENT, { date: dateOf(r, "last_date_found", "last_seen_at") ?? first, title: name, detail: detail || undefined, relevant: confidence !== "low" }));
+        }
+      }
+      return { events };
+    },
+  },
 ];
+
+const INTENT_LIST_KEYS = ["buying_intents", "intents", "keywords", "technologies", "topics"];
+
+/** The topic name of one buying-intent row: a plain field, or the name inside a nested keyword or technology object. */
+function topicName(r: Rec): string | undefined {
+  const plain = str(r, "name", "topic", "keyword_name", "technology_name", "slug");
+  if (plain) return plain;
+  for (const k of ["keyword", "technology", "intent"]) {
+    const inner = r[k];
+    if (isRec(inner)) {
+      const n = str(inner, "name", "slug");
+      if (n) return n;
+    } else if (typeof inner === "string" && inner.trim()) return inner.trim();
+  }
+  return undefined;
+}
 
 export const SIGNAL_BY_ID: Record<SignalId, SignalDef> = Object.fromEntries(SIGNALS.map((s) => [s.id, s])) as Record<SignalId, SignalDef>;
 
 /** Fallback prices keyed by endpoint id. */
 export const FALLBACK_PRICES: Record<string, number> = Object.fromEntries(SIGNALS.map((s) => [s.endpointId, s.fallbackMicros]));
+
+/** Endpoints whose catalog price is per result. The price check reads these in that unit. */
+export const PRICE_UNITS: Record<string, "call" | "result"> = Object.fromEntries(SIGNALS.filter((s) => s.priceUnit === "result").map((s) => [s.endpointId, s.priceUnit]));
 
 function compactUsd(n: number): string {
   if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;

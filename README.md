@@ -12,7 +12,7 @@ An open-source alternative to [6sense](https://6sense.com) for account intent an
 
 ## What it does
 
-Give it company domains and an ICP description. For each account it calls ten looot endpoints from nine signal categories, turns the answers into a 0 to 100 intent score and a buying stage (unaware, aware, considering, deciding), and ranks the accounts.
+Give it company domains and an ICP description. For each account it calls eleven looot endpoints from ten signal categories, turns the answers into a 0 to 100 intent score and a buying stage (unaware, aware, considering, deciding), and ranks the accounts.
 
 - Every score lists the signals behind it, the provider that supplied each one, its weight in points and what the call cost.
 - Weights, half-lives and stage thresholds live in `config/intent.config.json`. Edit the file, re-run.
@@ -78,20 +78,22 @@ npm run intent -- examples/accounts.csv --column domain --icp "B2B SaaS, 50 to 5
 ```
 
 ```text
-3 accounts, 10 signals each.
-  Hiring and job ads   predictleads   jobs.company                 $0.0100 x    3 =   $0.0300
-  Funding              predictleads   company.funding              $0.0100 x    3 =   $0.0300
-  Company news         predictleads   company.news                 $0.0100 x    3 =   $0.0300
-  Tech stack changes   predictleads   company.technographics       $0.0100 x    3 =   $0.0300
-  SEO movement         dataforseo     keywords.domain.overview     $0.0120 x    3 =   $0.0360
-  Web traffic          datagma        company.traffic             $0.06532 x    3 =  $0.19596
-  Google ads           scrapecreators google.company.ads          $0.00188 x    3 =  $0.00564
-  LinkedIn ads         scrapecreators ads.linkedin.search         $0.00188 x    3 =  $0.00564
-  Reddit mentions      scrapecreators reddit.post.search          $0.00188 x    3 =  $0.00564
-  Headcount growth     companyenrich  company.workforce            $0.0490 x    3 =   $0.1470
-  Total                                                            $0.17196 per account     $0.52
-  Prices: dated fallback in the code
-Quoted $0.52 at list price. Cap $5.00.
+3 accounts, 11 signals each.
+  Hiring and job ads         predictleads   jobs.company                 $0.0100 x    3 =   $0.0300
+  Funding                    predictleads   company.funding              $0.0100 x    3 =   $0.0300
+  Company news               predictleads   company.news                 $0.0100 x    3 =   $0.0300
+  Tech stack changes         predictleads   company.technographics       $0.0100 x    3 =   $0.0300
+  SEO movement               dataforseo     keywords.domain.overview     $0.0120 x    3 =   $0.0360
+  Web traffic                datagma        company.traffic             $0.06532 x    3 =  $0.19596
+  Google ads                 scrapecreators google.company.ads          $0.00188 x    3 =  $0.00564
+  LinkedIn ads               scrapecreators ads.linkedin.search         $0.00188 x    3 =  $0.00564
+  Reddit mentions            scrapecreators reddit.post.search          $0.00188 x    3 =  $0.00564
+  Headcount growth           companyenrich  company.workforce            $0.0490 x    3 =   $0.1470
+  Third-party buying intent  theirstack     companies.buying-intents     $0.0981 x    3 =   $0.2943
+  Total                                                                 $0.27006 per account     $0.81
+  Third-party buying intent: the price is per result. The app asks for 1 result per account, so $0.0981 is the most one account costs. The catalog says nothing found means no charge.
+  Prices: read from the public looot catalog
+Quoted $0.81 at list price. Cap $5.00.
 Dry run: no run was made and nothing was charged.
 ```
 
@@ -113,7 +115,8 @@ The web UI on a live key: put `LOOOT_TOKEN` and `LOOOT_INTENT_ADMIN_PASSWORD` in
 - The quote is printed first. A real run is refused (exit 2) when the quote is above `--max-spend`. Pass `--partial` to run until the cap instead.
 - `--max-spend` is in dollars. The default is 5. The web UI takes its cap from the server (`LOOOT_INTENT_MAX_RUN_USD`, default 5), not from the browser.
 - The cap counts list price for calls in flight and the real charge once a call ends, so a run does not go over it.
-- All ten signals cost $0.1720 per account at list price. 25 accounts is $4.30, 100 accounts is $17.20. Switch a signal off in the config to drop its cost.
+- All eleven signals cost $0.2701 per account at list price: $0.17196 for the ten per-call signals plus $0.0981 for third-party buying intent, which is priced per result. 25 accounts is $6.75 and 100 accounts is $27.01. The default web cap of $5 covers 18 accounts; for 25 pass `--max-spend 7` or raise `LOOOT_INTENT_MAX_RUN_USD`. Switch a signal off in the config to drop its cost: without buying intent a run is back to $0.1720 per account, $4.30 for 25.
+- Buying intent is priced per result, not per call. The app sends `limit: 1`, so one account costs at most one result ($0.0981), and the quote and the spend cap both reserve that full price before the call. The catalog description says nothing found means no charge. No live run has confirmed that, so the quote is the worst case.
 - A failed call is not charged. A call still running when waiting stops is `pending`. Run the same command again inside the freshness window (`freshnessWindow` in the config, a week by default) and finished calls replay at no charge.
 
 ## Deploy
@@ -181,7 +184,7 @@ No per-user accounts, no roles, no record of who signed in. The app has one admi
 
 ## Signals
 
-Job ids and prices are from the public looot catalog, read 2026-10-10. Prices are per call in USD.
+Job ids and prices are from the public looot catalog, read 2026-10-10. Prices are per call in USD, except buying intent, which is per result.
 
 | Signal | Provider | looot job | Endpoint | Price |
 | --- | --- | --- | --- | --- |
@@ -195,8 +198,11 @@ Job ids and prices are from the public looot catalog, read 2026-10-10. Prices ar
 | LinkedIn ads | Scrape Creators | `ads.linkedin.search` | `scrapecreators-linkedin-ads-search` | $0.00188 |
 | Reddit mentions | Scrape Creators | `reddit.post.search` | `scrapecreators-reddit-search` | $0.00188 |
 | Headcount growth | CompanyEnrich | `company.workforce` | `companyenrich-companies-workforce` | $0.0490 |
+| Third-party buying intent | TheirStack | `companies.buying-intents` | `theirstack-companies-buying-intents` | $0.0981 per result, 1 result per account |
 
-All ten together cost $0.1720 per account at list price. A typical run of 25 accounts is $4.30 and 100 accounts is $17.20. Turn a signal off in the config to drop its cost (web traffic and headcount are $0.114 of the $0.1720).
+All eleven together cost $0.27006 per account at list price (the ten per-call signals $0.17196, plus $0.0981 for one buying-intent result). A typical run of 25 accounts is 25 x $0.27006 = $6.75 and 100 accounts is $27.01. Turn a signal off in the config to drop its cost: buying intent is $0.0981 of the $0.2701, and web traffic and headcount together are $0.1143.
+
+Buying intent was added in 0.1.5. It reads the topics TheirStack detects in a company's job posts, each with a confidence level, a job-post count and first and last dates seen. The catalog lists no response fields for it, so the parser is tolerant (it accepts a list of topics under `buying_intents`, `intents`, `keywords`, `technologies` or `topics`, or a flat list) and the signal is marked unverified, like the other ten. A hand-written fixture is in `src/engine/fixtures/theirstackBuyingIntents.json`. It is job-post based intent, not the bidstream or content-consumption data 6sense sells.
 
 LinkedIn ads moved on 2026-10-10. `adyntel-linkedin` returns 404 on the live catalog, so the signal now runs `scrapecreators-linkedin-ads-search` at $0.00188 per call. It searches by company name, so the app sends the first label of the domain (`acme.com` becomes `acme`), which can match the wrong company for common words. The response shape has not been checked against a real run, so the signal stays marked unverified.
 
@@ -211,8 +217,8 @@ There is no model and no hidden constant. The ICP description is stored with the
 
 ## What is dropped
 
-- No first-party visitor tracking, no bidstream or keyword-research intent from third-party data pools, no CRM sync, no ad orchestration. 6sense has these. looot has no job that supplies them.
-- No G2, Capterra or Trustpilot review signal. The catalog has none. Google Maps and App Store reviews need a place or app id, not a domain, so they are not used.
+- No first-party visitor tracking, no bidstream or content-consumption intent (Bombora-style topic surge), no CRM sync, no ad orchestration. 6sense has these. Searches of the looot catalog for `bombora`, `6sense`, `g2 intent`, `intent topics`, `topic surge` and `buyer intent` found no such source. The one third-party intent source the catalog has is TheirStack buying intent (now a signal), which is derived from job posts. `dataforseo` search-intent endpoints classify what a keyword means (informational, commercial) and say nothing about an account, so they are not used.
+- No G2, Capterra or Trustpilot review signal. Searches for `g2`, `capterra`, `trustpilot`, `software reviews`, `review site` and `company reviews` found no such source. The review endpoints that exist (Google Maps, App Store, Tripadvisor, Facebook page, Google Shopping, Amazon) take a place, app, product or page id, not a company domain or name, and the Better Business Bureau endpoints take a BBB id or a keyword plus a location. None can be keyed from a domain through a documented input, so none is used.
 - Demo accounts use the reserved `.example` domain. The data is generated, not real.
 
 ## Troubleshooting
@@ -236,7 +242,7 @@ How to file an issue. Open one at https://github.com/loootai/looot-intent/issues
 
 ## Status
 
-No paid looot run was made. Request fields follow each endpoint's documented parameters in the catalog. Response parsers are built from provider docs and fixtures and read defensively, but no real response body has been checked against them. `shapeVerified` is `false` for every signal in `src/engine/signals.ts`. Expect to adjust a parser after your first live run, and run `--dry-run` and a 2-domain run first.
+No paid looot run was made. Request fields follow each endpoint's documented parameters in the catalog. Response parsers are built from provider docs and fixtures and read defensively, but no real response body has been checked against them. `shapeVerified` is `false` for all eleven signals in `src/engine/signals.ts`. Expect to adjust a parser after your first live run, and run `--dry-run` and a 2-domain run first.
 - The PredictLeads path parameter is sent as `company_id_or_domain`, as its description says. The catalog parameter list does not show it.
 
 If a parser fails on a real response, open an issue with the raw body (see Troubleshooting).

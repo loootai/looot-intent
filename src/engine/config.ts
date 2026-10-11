@@ -17,7 +17,7 @@ const SignalConfig = z.object({
   saturation: z.number().positive(),
 });
 
-const SIGNAL_IDS = ["hiring", "funding", "news", "tech", "seo", "traffic", "ads_google", "ads_linkedin", "social_reddit", "headcount"] as const;
+const SIGNAL_IDS = ["hiring", "funding", "news", "tech", "seo", "traffic", "ads_google", "ads_linkedin", "social_reddit", "headcount", "intent_topics"] as const;
 
 export const ConfigSchema = z.object({
   icp: z.object({

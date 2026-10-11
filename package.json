@@ -1,6 +1,6 @@
 {
   "name": "looot-intent",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Open-source account intent and buying-stage scoring. Domains and an ICP in, ranked accounts with an explainable score out. Next.js and looot.",
   "license": "MIT",
   "private": true,

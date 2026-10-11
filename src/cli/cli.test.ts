@@ -37,9 +37,11 @@ describe("main", () => {
     const code = await main([file, "--dry-run", "--offline"], {}, out);
     const text = lines.join("\n");
     expect(code).toBe(0);
-    expect(text).toContain("2 accounts, 10 signals each");
-    expect(text).toContain("Quoted $0.34 at list price");
+    expect(text).toContain("2 accounts, 11 signals each");
+    expect(text).toContain("Quoted $0.54 at list price");
     expect(text).toContain("no run was made");
+    expect(text).toContain("theirstack");
+    expect(text).toContain("per result");
     expect(fs.existsSync(path.join(dir, "state"))).toBe(false);
   });
   it("refuses a quote above the cap and runs nothing", async () => {

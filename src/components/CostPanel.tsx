@@ -45,7 +45,7 @@ export function CostPanel({ run }: { run: RunResult }) {
               return (
                 <tr key={l.signalId} className="border-t border-line">
                   <td className="py-1 pr-3">{l.label}</td><td className="py-1 pr-3 text-mute">{l.provider}</td>
-                  <td className="num py-1 pr-3 text-right">{usdPrecise(l.priceMicros)}</td><td className="num py-1 pr-3 text-right">{x?.ok ?? 0}/{l.calls}</td>
+                  <td className="num py-1 pr-3 text-right">{usdPrecise(l.priceMicros)}{l.unit === "result" && <span className="text-faint" title="Priced per result. The app asks for 1 result per account, so this is the most one account costs."> /result</span>}</td><td className="num py-1 pr-3 text-right">{x?.ok ?? 0}/{l.calls}</td>
                   <td className="py-1 pr-3 text-mute">
                     {x?.pending ? <span className="mr-1"><StatusChip status="pending" /> {x.pending}</span> : null}
                     {x?.unavailable ? <span className="mr-1"><StatusChip status="skipped_price" /> {x.unavailable}</span> : null}

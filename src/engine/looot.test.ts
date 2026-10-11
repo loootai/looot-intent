@@ -44,6 +44,15 @@ describe("prices", () => {
     expect(priceOfItem({ price: { state: "known", amountMicros: 10000, unit: "result" } })).toBeNull();
     expect(priceOfItem({ price: { state: "unknown" } })).toBeNull();
   });
+  it("reads a per-result price only for endpoints named as per-result", async () => {
+    const body = { price: { state: "known", amountMicros: 98100, unit: "result" } };
+    expect(priceOfItem(body)).toBeNull();
+    expect(priceOfItem(body, "result")).toBe(98100);
+    const f = vi.fn(async () => json(body));
+    const r = await fetchPrices({ a: 1, b: 2 }, { fetch: f as unknown as typeof fetch, units: { b: "result" } });
+    expect(r.prices).toEqual({ a: 1, b: 98100 });
+    expect(r.unread).toEqual(["a"]);
+  });
   it("keeps the fallback and names the endpoint when the catalog cannot be read", async () => {
     const f = vi.fn(async (url: string) => (url.endsWith("/a") ? json({ price: { state: "known", amountMicros: 7000, unit: "call" } }) : json({}, 404)));
     const r = await fetchPrices({ a: 1, b: 2 }, { fetch: f as unknown as typeof fetch });

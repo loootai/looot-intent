@@ -38,6 +38,15 @@ const PROFILES: Profile[] = [
   { domain: "stonebridge-co.example", hiring: 0, fundedDaysAgo: null, news: 0, tech: [], seoNet: -0.2, trafficBase: 22_000, trafficGrowth: -0.15, adsGoogle: 0, adsLinkedin: 0, reddit: 0, headcountBase: 450, headcountGrowth: -0.06 },
 ];
 
+/** Buying-intent topics per demo account: name, confidence, job posts, days since last seen. Accounts not listed have none, and the demo is then charged nothing. */
+const INTENT: Record<string, [string, "low" | "medium" | "high", number, number][]> = {
+  "northbeam-labs.example": [["Revenue intelligence", "high", 9, 4], ["Sales engagement", "high", 6, 9], ["Data warehouse", "medium", 3, 20]],
+  "quillstack.example": [["Sales engagement", "high", 5, 8], ["Conversation intelligence", "medium", 3, 25]],
+  "ledgerly.example": [["Revenue intelligence", "medium", 2, 30]],
+  "tandemworks.example": [["Marketing automation", "medium", 2, 18]],
+  "fieldnote.example": [["Data warehouse", "low", 1, 80]],
+};
+
 /** The domains the demo scores, in file order. */
 export const DEMO_DOMAINS = PROFILES.map((p) => p.domain);
 
@@ -87,6 +96,11 @@ function bodyFor(endpointId: string, p: Profile): unknown {
       return { posts: Array.from({ length: p.reddit }, (_, i) => ({ title: `Anyone using ${p.domain.split(".")[0]}?`, subreddit: i % 2 ? "sales" : "saas", created_utc: Math.floor((DEMO_NOW.getTime() - (2 + i * 5) * DAY) / 1000), url: `https://reddit.example/${i}` })) };
     case "companyenrich-companies-workforce":
       return { observedEmployeeCount: Math.round(p.headcountBase * (1 + p.headcountGrowth)), employeeRange: "51-200", departments: [{ name: "Sales", count: 20 }] };
+    case "theirstack-companies-buying-intents": {
+      const topics = INTENT[p.domain] ?? [];
+      if (topics.length === 0) return { data: [] };
+      return { metadata: { total_results: 1 }, data: [{ domain: p.domain, buying_intents: topics.map(([name, confidence, jobs, last]) => ({ keyword: { name, slug: name.toLowerCase().replace(/\s+/g, "-") }, confidence, jobs, first_date_found: daysAgo(last + 40).slice(0, 10), last_date_found: daysAgo(last).slice(0, 10) })) }] };
+    }
     default:
       return { data: [] };
   }

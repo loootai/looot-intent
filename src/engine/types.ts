@@ -1,6 +1,6 @@
-export type Category = "hiring" | "funding" | "news" | "tech" | "seo" | "traffic" | "ads" | "social" | "headcount";
+export type Category = "hiring" | "funding" | "news" | "tech" | "seo" | "traffic" | "ads" | "social" | "headcount" | "intent";
 
-export type SignalId = "hiring" | "funding" | "news" | "tech" | "seo" | "traffic" | "ads_google" | "ads_linkedin" | "social_reddit" | "headcount";
+export type SignalId = "hiring" | "funding" | "news" | "tech" | "seo" | "traffic" | "ads_google" | "ads_linkedin" | "social_reddit" | "headcount" | "intent_topics";
 
 export type Stage = "unaware" | "aware" | "considering" | "deciding";
 
@@ -88,6 +88,8 @@ export interface QuoteLine {
   provider: string;
   jobId: string;
   endpointId: string;
+  /** "call": one flat price per call. "result": the price is per result, and the app asks for one result at most. */
+  unit: "call" | "result";
   calls: number;
   priceMicros: number;
   totalMicros: number;

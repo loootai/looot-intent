@@ -125,11 +125,14 @@ interface CatalogItem {
   price?: { state?: string; amountMicros?: number; unit?: string } | null;
 }
 
-/** Reads the per-call price in micros from one public catalog item. null when it has no known call price. */
-export function priceOfItem(item: CatalogItem | null | undefined): number | null {
+/** The unit a catalog price is quoted in. */
+export type PriceUnit = "call" | "result";
+
+/** Reads the price in micros from one public catalog item, in the unit asked for (per call unless told otherwise). null when it has no known price in that unit. */
+export function priceOfItem(item: CatalogItem | null | undefined, unit: PriceUnit = "call"): number | null {
   const p = item?.price;
   if (!p || p.state !== "known" || typeof p.amountMicros !== "number" || p.amountMicros < 0) return null;
-  if (p.unit && p.unit !== "call") return null;
+  if (p.unit && p.unit !== unit) return null;
   return Math.round(p.amountMicros);
 }
 
@@ -143,10 +146,10 @@ export interface PriceResult {
 }
 
 /**
- * Free, no token needed. Reads current per-call prices from the public catalog. An endpoint that cannot be read keeps
+ * Free, no token needed. Reads current prices from the public catalog (per call, or per result for the endpoints named in `units`). An endpoint that cannot be read keeps
  * its dated fallback price and is named in `unread`, so the engine refuses to call it.
  */
-export async function fetchPrices(fallback: PriceMap, opts: { baseUrl?: string; fetch?: typeof fetch } = {}): Promise<PriceResult> {
+export async function fetchPrices(fallback: PriceMap, opts: { baseUrl?: string; fetch?: typeof fetch; /** Endpoints whose catalog price is per result, not per call. */ units?: Record<string, PriceUnit> } = {}): Promise<PriceResult> {
   const base = (opts.baseUrl ?? process.env.LOOOT_API_URL ?? "https://api.looot.ai").replace(/\/+$/, "");
   const f = opts.fetch ?? fetch;
   const prices: PriceMap = { ...fallback };
@@ -155,7 +158,7 @@ export async function fetchPrices(fallback: PriceMap, opts: { baseUrl?: string; 
     Object.keys(fallback).map(async (id) => {
       try {
         const res = await f(`${base}/v1/public-catalog/${encodeURIComponent(id)}`);
-        const price = res.ok ? priceOfItem((await res.json()) as CatalogItem) : null;
+        const price = res.ok ? priceOfItem((await res.json()) as CatalogItem, opts.units?.[id] ?? "call") : null;
         if (price === null) unread.push(id);
         else prices[id] = price;
       } catch {

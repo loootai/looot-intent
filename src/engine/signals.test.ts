@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "./config";
 import { SIGNAL_BY_ID, SIGNALS, companyNameOf, matchesAny } from "./signals";
@@ -34,6 +36,32 @@ describe("LinkedIn ads signal", () => {
     const parsed = SIGNAL_BY_ID.ads_linkedin.parse({ ads: [{ id: "1", adType: "video", headline: "Hello", startDate: "2026-10-01" }] }, ctx);
     expect(parsed.events).toHaveLength(1);
     expect(parsed.events[0]).toMatchObject({ title: "LinkedIn video", detail: "Hello", date: "2026-10-01T00:00:00.000Z" });
+  });
+});
+
+describe("third-party buying intent signal", () => {
+  const def = SIGNAL_BY_ID.intent_topics;
+  const fixture = JSON.parse(fs.readFileSync(path.join(__dirname, "fixtures", "theirstackBuyingIntents.json"), "utf8"));
+  it("runs the TheirStack endpoint at the catalog price per result and asks for one result", () => {
+    expect(def).toMatchObject({ endpointId: "theirstack-companies-buying-intents", jobId: "companies.buying-intents", provider: "theirstack", fallbackMicros: 98_100, priceUnit: "result", shapeVerified: false });
+    expect(def.buildInput("Acme.com")).toEqual({ company_domain: "Acme.com", limit: 1 });
+  });
+  it("reads topics, confidence, job counts and dates from the fixture", () => {
+    const { events } = def.parse(fixture, ctx);
+    expect(events.map((e) => e.title)).toEqual(["Revenue intelligence", "Sales engagement", "Data warehouse"]);
+    expect(events[0]).toMatchObject({ signalId: "intent_topics", category: "intent", provider: "theirstack", date: "2026-10-06T00:00:00.000Z", relevant: true });
+    expect(events[0].detail).toContain("high confidence");
+    expect(events[0].detail).toContain("9 job posts");
+    expect(events.map((e) => e.relevant)).toEqual([true, true, false]);
+  });
+  it("accepts a flat list of topics and returns nothing for an empty or odd body", () => {
+    const flat = { data: [{ name: "Cloud migration", confidence: "high", num_jobs: 3, last_date_found: "2026-10-01" }] };
+    expect(def.parse(flat, ctx).events[0]).toMatchObject({ title: "Cloud migration", relevant: true });
+    expect(def.parse({ data: [] }, ctx).events).toEqual([]);
+    expect(def.parse("<html>", ctx).events).toEqual([]);
+  });
+  it("has its own weight in the config", () => {
+    expect(cfg.signals.intent_topics.weight).toBeGreaterThan(0);
   });
 });
 

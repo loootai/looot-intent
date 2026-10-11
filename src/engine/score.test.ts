@@ -91,3 +91,17 @@ describe("scoreAccount", () => {
     expect(a.pendingCount).toBe(1);
   });
 });
+
+describe("third-party buying intent", () => {
+  it("scores topics from the last 60 days with its own weight and names the provider", () => {
+    const e = (days: number, relevant = true): SignalEvent => ({ signalId: "intent_topics", category: "intent", provider: "theirstack", title: "Revenue intelligence", relevant, date: new Date(now.getTime() - days * 86_400_000).toISOString() });
+    const s = strengthOf(ok("intent_topics", [e(0), e(0), e(0)]), cfg.signals.intent_topics, now, undefined);
+    expect(s.strength).toBe(1);
+    const only = structuredClone(cfg);
+    for (const id of Object.keys(only.signals) as SignalId[]) only.signals[id].enabled = id === "intent_topics";
+    const a = scoreAccount("acme.com", [ok("intent_topics", [e(0), e(0), e(0)])], only, now);
+    expect(a.breakdown[0]).toMatchObject({ provider: "theirstack", category: "intent", maxPoints: 100 });
+    expect(maxPointsOf(cfg).intent_topics).toBeCloseTo((100 * 14) / 114, 1);
+    expect(a.reasons[0]).toContain("(theirstack)");
+  });
+});

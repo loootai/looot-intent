@@ -3,7 +3,7 @@ import { DEMO_DOMAINS, DEMO_ICP, DEMO_NOW, demoRunner, demoSnapshots } from "@/e
 import { buildQuote, parseDomains, runIntent } from "@/engine/engine";
 import { fetchPrices, hasLoootToken, loootFromEnv } from "@/engine/looot";
 import { toMicros } from "@/engine/money";
-import { FALLBACK_PRICES } from "@/engine/signals";
+import { FALLBACK_PRICES, PRICE_UNITS } from "@/engine/signals";
 import { readState, writeState, type State } from "@/engine/state";
 import { maxRunUsd } from "@/lib/auth/policy";
 import type { Quote, RunResult } from "@/engine/types";
@@ -50,7 +50,7 @@ export async function quoteFor(domainText: string): Promise<QuoteReply> {
   const { domains, rejected } = parseDomains(domainText);
   const cfg = appConfig();
   if (isDemo()) return { quote: buildQuote(domains, cfg, FALLBACK_PRICES, "catalog"), rejected, domains, unpriced: [] };
-  const live = await fetchPrices(FALLBACK_PRICES);
+  const live = await fetchPrices(FALLBACK_PRICES, { units: PRICE_UNITS });
   return { quote: buildQuote(domains, cfg, live.prices, live.source), rejected, domains, unpriced: live.unread };
 }
 
@@ -73,7 +73,7 @@ export async function runFor(input: { domains: string; icp?: string; confirmedMa
     return result;
   }
   const looot = loootFromEnv();
-  const live = await fetchPrices(FALLBACK_PRICES);
+  const live = await fetchPrices(FALLBACK_PRICES, { units: PRICE_UNITS });
   const quote = buildQuote(domains, cfg, live.prices, live.source);
   const dollars = (m: number) => `$${(m / 1e6).toFixed(2)}`;
   if (quote.totalMicros > input.confirmedMaxMicros) throw new Error(`The price now (${dollars(quote.totalMicros)}) is above the quote you confirmed (${dollars(input.confirmedMaxMicros)}). Get a new quote.`);

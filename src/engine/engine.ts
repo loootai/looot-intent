@@ -57,7 +57,7 @@ export function enabledSignals(cfg: IntentConfig): SignalDef[] {
 export function buildQuote(domains: string[], cfg: IntentConfig, prices: PriceMap, priceSource: Quote["priceSource"] = "catalog"): Quote {
   const lines: QuoteLine[] = enabledSignals(cfg).map((s) => {
     const priceMicros = prices[s.endpointId] ?? s.fallbackMicros;
-    return { signalId: s.id, label: s.label, provider: s.provider, jobId: s.jobId, endpointId: s.endpointId, calls: domains.length, priceMicros, totalMicros: priceMicros * domains.length };
+    return { signalId: s.id, label: s.label, provider: s.provider, jobId: s.jobId, endpointId: s.endpointId, unit: s.priceUnit, calls: domains.length, priceMicros, totalMicros: priceMicros * domains.length };
   });
   const perAccountMicros = lines.reduce((n, l) => n + l.priceMicros, 0);
   return { lines, accounts: domains.length, perAccountMicros, totalMicros: perAccountMicros * domains.length, priceSource };

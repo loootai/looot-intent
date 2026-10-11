@@ -2,6 +2,22 @@
 
 Built from the GitHub release notes. Each version links to its release page.
 
+## 0.1.5 (2026-10-11)
+
+#### Added: third-party buying intent
+
+The catalog has a buying-intent source after all, so the README no longer lists it as dropped. A review-site signal is still dropped, see below.
+
+- New signal `intent_topics`, "Third-party buying intent", from TheirStack. looot job `companies.buying-intents`, endpoint `theirstack-companies-buying-intents`. It lists the buying-intent topics TheirStack detects in a company's job posts, each with a confidence level, a job-post count and first and last dates seen.
+- Price $0.0981 per result. The app sends `limit: 1`, so one account costs at most one result. The quote and the spend cap reserve that full price before the call, the idempotency key and signed quote flow are unchanged, and the caller cannot set the limit.
+- Own weight (14), half-life (60 days) and saturation (3 topics) in `config/intent.config.json`. Set `enabled` to false to turn it off.
+- Typical cost at list price rises from $0.1720 to $0.2701 per account. 25 accounts is $6.75 (was $4.30) and 100 accounts is $27.01 (was $17.20). The default $5 web cap covers 18 accounts; raise `LOOOT_INTENT_MAX_RUN_USD` or `--max-spend` for more, or switch the signal off.
+- The price check now reads per-result prices for endpoints that are priced that way, so the live quote does not call the endpoint "source unavailable".
+- The quote table, run panel and cost panel show the provider and a "/result" mark on the price.
+- The response parser is tolerant and unverified: the catalog lists no response fields for this endpoint and no paid run was made. A hand-written fixture is in `src/engine/fixtures/`.
+- Still dropped: Bombora-style topic surge and bidstream data, and G2, Capterra and Trustpilot review signals. Catalog searches found no source for them. The review endpoints that exist need a place, app or product id, not a domain.
+- Tests: 106 before, 117 after.
+
 ## 0.1.4 (2026-10-11)
 
 #### Security fix: the admin routes are now closed

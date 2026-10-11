@@ -43,7 +43,7 @@ describe("domains", () => {
 describe("quote", () => {
   it("is calls times list price per enabled signal and makes no call", () => {
     const q = buildQuote(["a.com", "b.com"], cfg, FALLBACK_PRICES);
-    expect(q.lines).toHaveLength(10);
+    expect(q.lines).toHaveLength(11);
     expect(q.perAccountMicros).toBe(Object.values(FALLBACK_PRICES).reduce((a, b) => a + b, 0));
     expect(q.totalMicros).toBe(q.perAccountMicros * 2);
     const off = structuredClone(cfg);
@@ -65,8 +65,8 @@ describe("idempotency key", () => {
   it("sends the key on every call", async () => {
     const { looot, calls } = recorder(() => done(0.01));
     await runIntent({ ...base, domains: ["acme.com"], looot, capMicros: 5_000_000 });
-    expect(calls).toHaveLength(10);
-    expect(new Set(calls.map((c) => c.key)).size).toBe(10);
+    expect(calls).toHaveLength(11);
+    expect(new Set(calls.map((c) => c.key)).size).toBe(11);
     expect(calls.every((c) => c.key.startsWith("intent:v1:acme.com:"))).toBe(true);
   });
 });
@@ -78,7 +78,7 @@ describe("spend cap", () => {
     const { result } = await runIntent({ ...base, domains: ["a.com", "b.com", "c.com"], looot, capMicros: cap, config: { ...cfg, concurrency: 3 } });
     const listTotal = calls.reduce((n, c) => n + FALLBACK_PRICES[c.endpointId], 0);
     expect(listTotal).toBeLessThanOrEqual(cap);
-    expect(result.skippedByCap).toBe(30 - calls.length);
+    expect(result.skippedByCap).toBe(33 - calls.length);
     expect(result.skippedByCap).toBeGreaterThan(0);
     const skipped = result.accounts.flatMap((a) => a.breakdown).filter((b) => b.status === "skipped_cap");
     expect(skipped).toHaveLength(result.skippedByCap);
@@ -97,6 +97,43 @@ describe("spend cap", () => {
   });
 });
 
+describe("third-party buying intent signal", () => {
+  const def = SIGNAL_BY_ID.intent_topics;
+  it("is quoted per result, with one result per account at most", () => {
+    const q = buildQuote(["a.com", "b.com", "c.com"], cfg, FALLBACK_PRICES);
+    const line = q.lines.find((l) => l.signalId === "intent_topics")!;
+    expect(line).toMatchObject({ provider: "theirstack", jobId: "companies.buying-intents", endpointId: "theirstack-companies-buying-intents", priceMicros: 98_100, unit: "result", calls: 3, totalMicros: 294_300 });
+    expect(q.perAccountMicros).toBe(270_060);
+  });
+  it("sends the fixed result limit with the key, and a different key per domain", async () => {
+    const { looot, calls } = recorder(() => done(0.0981));
+    await runIntent({ ...base, domains: ["acme.com", "globex.io"], looot, capMicros: 5_000_000 });
+    const mine = calls.filter((c) => c.endpointId === def.endpointId);
+    expect(mine.map((c) => c.input)).toEqual([{ company_domain: "acme.com", limit: 1 }, { company_domain: "globex.io", limit: 1 }]);
+    expect(new Set(mine.map((c) => c.key)).size).toBe(2);
+    expect(mine.every((c) => c.key.startsWith("intent:v1:"))).toBe(true);
+  });
+  it("reserves a full result's price against the cap before the call", async () => {
+    const { looot, calls } = recorder(() => done(0.0981));
+    const { result } = await runIntent({ ...base, domains: ["a.com"], looot, capMicros: 97_000, config: { ...cfg, signals: { ...cfg.signals, intent_topics: { ...cfg.signals.intent_topics, enabled: true } } } });
+    expect(calls.map((c) => c.endpointId)).not.toContain(def.endpointId);
+    expect(result.accounts[0].breakdown.find((b) => b.signalId === "intent_topics")!.status).toBe("skipped_cap");
+  });
+  it("is refused when the catalog price cannot be read", async () => {
+    const { looot, calls } = recorder(() => done(0));
+    const { result } = await runIntent({ ...base, domains: ["a.com"], looot, capMicros: 5_000_000, unpriced: [def.endpointId] });
+    expect(calls.map((c) => c.endpointId)).not.toContain(def.endpointId);
+    expect(result.accounts[0].breakdown.find((b) => b.signalId === "intent_topics")!.status).toBe("skipped_price");
+  });
+  it("shows up in the demo with its provider and a score contribution", async () => {
+    const { result } = await runIntent({ ...base, now: DEMO_NOW, domains: DEMO_DOMAINS, looot: demoRunner(), capMicros: 5_000_000, demo: true, snapshots: demoSnapshots() });
+    const top = result.accounts.find((a) => a.domain === DEMO_DOMAINS[0])!;
+    const line = top.breakdown.find((b) => b.signalId === "intent_topics")!;
+    expect(line).toMatchObject({ provider: "theirstack", endpointId: "theirstack-companies-buying-intents", status: "ok" });
+    expect(line.points).toBeGreaterThan(0);
+  });
+});
+
 describe("failure handling", () => {
   it("treats a run still in progress as pending, not failed", async () => {
     const { looot } = recorder((id) => (id === "companyenrich-companies-workforce" ? { runId: "r9", status: "pending_provider" } : done(0.01)));
@@ -111,7 +148,7 @@ describe("failure handling", () => {
     const { looot } = recorder((id) => (id === "scrapecreators-linkedin-ads-search" ? { runId: "r", status: "failed", actualCost: 0, error: { code: "upstream_error", message: "x" } } : done(0.01)));
     const { result } = await runIntent({ ...base, domains: ["a.com"], looot, capMicros: 5_000_000 });
     expect(result.failedCalls).toBe(1);
-    expect(result.spentMicros).toBe(9 * 10_000);
+    expect(result.spentMicros).toBe(10 * 10_000);
   });
   it("stops the whole run on a 402 and says why", async () => {
     const { looot, calls } = recorder(() => {
@@ -125,7 +162,7 @@ describe("failure handling", () => {
     const { looot } = recorder(() => done(0.01, "<html>"));
     const { result } = await runIntent({ ...base, domains: ["a.com"], looot, capMicros: 5_000_000 });
     expect(result.accounts[0].score).toBe(0);
-    expect(result.spentMicros).toBe(10 * 10_000);
+    expect(result.spentMicros).toBe(11 * 10_000);
   });
   it("survives a parser that throws", async () => {
     const spy = vi.spyOn(SIGNAL_BY_ID.news, "parse").mockImplementation(() => {

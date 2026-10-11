@@ -15,7 +15,7 @@
 ## Files
 
 - config/intent.config.json: signal weights, half-lives, stage thresholds, ICP keyword lists. Edit this to change scoring.
-- src/engine/signals.ts: the ten looot endpoints, their inputs and parsers.
+- src/engine/signals.ts: the eleven looot endpoints, their inputs and parsers.
 - src/engine/score.ts: the scoring rules.
 - skills/looot-intent/SKILL.md: Claude Code skill.
 

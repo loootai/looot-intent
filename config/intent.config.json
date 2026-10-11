@@ -19,6 +19,7 @@
     "ads_google":    { "enabled": true, "weight": 7,  "halfLifeDays": 30,  "saturation": 5 },
     "ads_linkedin":  { "enabled": true, "weight": 8,  "halfLifeDays": 30,  "saturation": 4 },
     "social_reddit": { "enabled": true, "weight": 4,  "halfLifeDays": 21,  "saturation": 4 },
-    "headcount":     { "enabled": true, "weight": 10, "halfLifeDays": 30,  "saturation": 0.1 }
+    "headcount":     { "enabled": true, "weight": 10, "halfLifeDays": 30,  "saturation": 0.1 },
+    "intent_topics": { "enabled": true, "weight": 14, "halfLifeDays": 60,  "saturation": 3 }
   }
 }
