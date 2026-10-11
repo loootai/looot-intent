@@ -20,6 +20,7 @@ export function toMarkdown(run: RunResult): string {
   lines.push(`# Account intent report`, "");
   lines.push(`Run ${run.runId}${run.demo ? " (demo data, no looot calls)" : ""}. ${run.accounts.length} accounts. Quoted ${usd(run.quotedMicros)} at list price, spent ${usd(run.spentMicros)}, cap ${usd(run.capMicros)}.`);
   if (run.pendingCalls) lines.push("", `${run.pendingCalls} calls were still running at the provider when waiting stopped. They are pending, not failed. Run again in the same window to collect them without a second charge.`);
+  if (run.skippedByBudget) lines.push("", `${run.skippedByBudget} calls were skipped because the period budget would have been passed.`);
   if (run.skippedByCap) lines.push("", `${run.skippedByCap} calls were skipped because the spend cap would have been passed.`);
   if (run.aborted) lines.push("", run.aborted);
   lines.push("", `ICP: ${run.icp}`, "");

@@ -112,12 +112,22 @@ The web UI on a live key: put `LOOOT_TOKEN` and `LOOOT_INTENT_ADMIN_PASSWORD` in
 
 ## Spending
 
+Four limits stand between a request and a charge, checked in this order: the quote, the cap per run, the period budget, then the call.
+
 - The quote is printed first. A real run is refused (exit 2) when the quote is above `--max-spend`. Pass `--partial` to run until the cap instead.
 - `--max-spend` is in dollars. The default is 5. The web UI takes its cap from the server (`LOOOT_INTENT_MAX_RUN_USD`, default 5), not from the browser.
-- The cap counts list price for calls in flight and the real charge once a call ends, so a run does not go over it.
+- The cap counts list price for calls in flight and the real charge once a call ends, so a run does not go over it. With up to 16 calls in flight in one process, each call counts its list price against the cap before it waits on anything else.
+- The period budget caps all runs together: a daily and a monthly amount (UTC), $10 and $50 until you change them. The owner changes them on the Costs page of the web UI, or sets the starting values with `LOOOT_INTENT_DAILY_USD` and `LOOOT_INTENT_MONTHLY_USD`. A request to `/api/run` cannot carry a budget: any budget field in it is ignored. The CLI refuses a run whose quote is above what is left, unless you pass `--partial`.
+- Before each paid call, one call at a time, the app reserves its list price in `budget.json` (in `LOOOT_INTENT_DIR`), under a lock file, and refuses the call if used plus reserved plus the price would pass the daily or the monthly budget. Calls and runs started together cannot both pass. When the call ends the reservation becomes the real charge. A call looot answered with an error releases it. A call still running at looot (`pending`) keeps its reservation: it is never recorded as failed at $0 and the budget is never handed back early.
+- The next run looks up every pending call with `GET /v1/runs/{id}` and settles the ones that ended, to their real cost. If looot cannot be reached, or the app died before it got a run id, the reservation stays for 24 hours and is then released.
+- The sidebar and the Costs page show used, reserved and remaining for today and this month. At the budget the call is skipped with a message that names the limit.
+- Every call has a stable key made from the account, the signal, the normalised input and the refresh period. The refresh period is the freshness window from the config (a week by default), taken from the clock only to name the period, with no date or time salt inside it. A finished call is stored under its key for 40 days. Repeating the same request inside the window is answered from the stored result: no call, no reservation, no charge. When the window rolls over, the same account gets a new explicit request with its own stable key, and that one is charged once.
+- The looot token balance is the final limit. Fund a dedicated token with only what you are willing to spend, and keep the budget below it.
 - All eleven signals cost $0.2701 per account at list price: $0.17196 for the ten per-call signals plus $0.0981 for third-party buying intent, which is priced per result. 25 accounts is $6.75 and 100 accounts is $27.01. The default web cap of $5 covers 18 accounts; for 25 pass `--max-spend 7` or raise `LOOOT_INTENT_MAX_RUN_USD`. Switch a signal off in the config to drop its cost: without buying intent a run is back to $0.1720 per account, $4.30 for 25.
 - Buying intent is priced per result, not per call. The app sends `limit: 1`, so one account costs at most one result ($0.0981), and the quote and the spend cap both reserve that full price before the call. The catalog description says nothing found means no charge. No live run has confirmed that, so the quote is the worst case.
-- A failed call is not charged. A call still running when waiting stops is `pending`. Run the same command again inside the freshness window (`freshnessWindow` in the config, a week by default) and finished calls replay at no charge.
+- A failed call is not charged. A call still running when waiting stops is `pending` and keeps its reservation. Run the same command again inside the freshness window (`freshnessWindow` in the config, a week by default) and finished calls replay at no charge.
+
+The budget lives in a file, so run one instance on a disk that persists. Several instances, or a serverless host with a throwaway disk, do not share it.
 
 ## Deploy
 
@@ -146,8 +156,8 @@ The routes are listed in `src/lib/auth/routes.ts`. A test reads `src/app` and fa
 | Kind | Count | Routes |
 | --- | --- | --- |
 | Public by design | 4 routes | `/login`, `/api/auth/login`, `/api/auth/logout`, `/api/health` |
-| Admin pages | 2 | `/` (ranking, quote and run panel), `/accounts/[domain]` |
-| Admin API | 2 | `/api/quote` (reads the public catalog, free), `/api/run` (paid looot run) |
+| Admin pages | 3 | `/` (ranking, quote and run panel), `/accounts/[domain]`, `/costs` (budget and cost) |
+| Admin API | 3 | `/api/quote` (reads the public catalog, free), `/api/run` (paid looot run), `/api/budget` (read, and change the period budget) |
 
 There are no server actions and no export routes. The CLI runs on your own machine and does not go through the web gate.
 
@@ -162,7 +172,7 @@ There are no server actions and no export routes. The CLI runs on your own machi
 
 ### Spending
 
-`POST /api/run` takes its ceiling from the server: `LOOOT_INTENT_MAX_RUN_USD`, default 5. The browser sends the quote total it saw as `confirmedMaxMicros`, which can only lower the ceiling. The server prices the list again before any paid call and refuses when that price is above the server cap or above the confirmed quote. A `capUsd` field in the body is ignored. Each session may start 6 runs in 10 minutes, then gets a 429. The limiter is in memory, so behind several instances also rate limit at your proxy.
+`POST /api/run` takes its ceiling from the server: `LOOOT_INTENT_MAX_RUN_USD`, default 5. The browser sends the quote total it saw as `confirmedMaxMicros`, which only checks the price: it neither lowers nor raises the ceiling. The server prices the list again before any paid call and refuses when that price is above the server cap or above the confirmed quote. A `capUsd` field in the body is ignored. Then comes the period budget: a daily and a monthly amount, changed only by the signed-in owner (`PUT /api/budget`, session and CSRF token), never by a run request. Each paid call reserves its price against the budget before it is made. See [Spending](#spending). The looot token balance is the final limit, so give the app a token funded with only what you are willing to spend, and run one instance on a persistent disk, because the budget file is not shared between hosts. Each session may start 6 runs in 10 minutes, then gets a 429. The limiter is in memory, so behind several instances also rate limit at your proxy.
 
 ### Setup
 

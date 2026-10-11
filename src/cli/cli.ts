@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { Budget } from "../engine/budget";
 import { loadConfig, DEFAULT_CONFIG_PATH } from "../engine/config";
 import { DEMO_DOMAINS, DEMO_ICP, DEMO_NOW, demoRunner, demoSnapshots } from "../engine/demo";
 import { buildQuote, parseCsvDomains, parseDomains, runIntent } from "../engine/engine";
@@ -23,7 +24,7 @@ Options
   --icp "text"            ICP description. Overrides the config file
   --config <file>         Scoring config (default ${DEFAULT_CONFIG_PATH})
   --max-spend <usd>       Per-run spend cap in dollars (default 5)
-  --partial               Run until the cap even when the quote is above it
+  --partial               Run until the cap or the period budget even when the quote is above it
   --out <dir>             Where reports go (default ./out)
   --format json,csv,md    Report formats (default json,csv,md)
   --dry-run               Print the list-price cost and make no run
@@ -33,6 +34,8 @@ Options
 
 Environment
   LOOOT_TOKEN             Your looot key. Not needed for --demo or --dry-run
+  LOOOT_INTENT_DAILY_USD  Default daily budget until the owner saves one in the web UI (default 10)
+  LOOOT_INTENT_MONTHLY_USD Default monthly budget (default 50)
   LOOOT_API_URL           Override the API base (default https://api.looot.ai)
 `;
 
@@ -173,6 +176,17 @@ export async function main(argv: string[], env: Record<string, string | undefine
       }
     }
 
+    // Check order: quote, per-run cap (above), period budget, then the calls.
+    const budget = args.demo ? undefined : new Budget();
+    if (budget && "getRun" in looot) {
+      await budget.reconcile(looot as unknown as { getRun(id: string): Promise<import("../engine/looot").LoootRun> });
+      const room = await budget.status();
+      out(`Budget left: ${usd(room.remainingMicros)} (${usd(room.day.remainingMicros)} today, ${usd(room.month.remainingMicros)} this month, ${usd(room.day.reservedMicros)} reserved).`);
+      if (quote.totalMicros > room.remainingMicros && !args.partial) {
+        out("Refused: the quote is above what is left of the period budget. Wait for the period to roll over, raise the budget on the Costs page of the web UI, or pass --partial to run until it is reached.");
+        return 2;
+      }
+    }
     const state = readState();
     const { result, snapshots } = await runIntent({
       domains,
@@ -182,6 +196,7 @@ export async function main(argv: string[], env: Record<string, string | undefine
       priceSource,
       unpriced,
       capMicros,
+      ledger: budget,
       snapshots: args.demo ? demoSnapshots() : state.snapshots,
       now: args.demo ? DEMO_NOW : new Date(),
       demo: args.demo,
@@ -208,6 +223,7 @@ export async function main(argv: string[], env: Record<string, string | undefine
     out("");
     result.accounts.slice(0, 10).forEach((a, i) => out(`${String(i + 1).padStart(3)}  ${String(a.score).padStart(3)}  ${a.stage.padEnd(11)} ${a.domain}`));
     out(`Spent ${usd(result.spentMicros)} of ${usd(capMicros)} cap.${result.pendingCalls ? ` ${result.pendingCalls} calls pending, run again to collect them without a second charge.` : ""}${result.skippedByCap ? ` ${result.skippedByCap} calls skipped by the cap.` : ""}${result.failedCalls ? ` ${result.failedCalls} calls failed.` : ""}`);
+    if (result.skippedByBudget) out(`${result.skippedByBudget} calls skipped. ${result.budgetMessage ?? ""}`);
     if (result.aborted) out(result.aborted);
     for (const w of written) out(`Wrote ${w}`);
     return result.aborted ? 1 : 0;

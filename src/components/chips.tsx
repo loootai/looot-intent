@@ -13,7 +13,7 @@ export function StageChip({ stage, className }: { stage: Stage; className?: stri
   return <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-12 font-medium capitalize", STAGE_STYLE[stage], className)}>{stage}</span>;
 }
 
-const STATUS_LABEL: Record<CallStatus, string> = { ok: "ok", failed: "failed", pending: "pending", skipped_cap: "skipped, cap", skipped_price: "source unavailable", parse_error: "unreadable" };
+const STATUS_LABEL: Record<CallStatus, string> = { ok: "ok", failed: "failed", pending: "pending", skipped_cap: "skipped, cap", skipped_budget: "skipped, budget", skipped_price: "source unavailable", parse_error: "unreadable" };
 
 /** A call status. Only the ones that need attention are drawn loud. */
 export function StatusChip({ status }: { status: CallStatus }) {

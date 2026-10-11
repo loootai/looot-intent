@@ -34,7 +34,7 @@ export interface Parsed {
   metric?: Metric;
 }
 
-export type CallStatus = "ok" | "failed" | "pending" | "skipped_cap" | "skipped_price" | "parse_error";
+export type CallStatus = "ok" | "failed" | "pending" | "skipped_cap" | "skipped_budget" | "skipped_price" | "parse_error";
 
 /** What one provider call for one account produced. */
 export interface SignalResult {
@@ -122,6 +122,10 @@ export interface RunResult {
   spentMicros: number;
   /** Calls skipped because the cap would have been passed. */
   skippedByCap: number;
+  /** Calls not made because the period budget would have been passed. */
+  skippedByBudget?: number;
+  /** The refusal text when the period budget stopped a call. */
+  budgetMessage?: string | null;
   /** Calls that were still running when waiting stopped. They are not failures. */
   pendingCalls: number;
   failedCalls: number;

@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { ListOrdered } from "lucide-react";
+import { ListOrdered, Wallet } from "lucide-react";
 
 export type ShellNavItem = {
   href: string;
@@ -22,5 +22,6 @@ export const SHELL = {
   docsUrl: "https://docs.looot.ai",
   nav: <ShellNavItem[]>[
     { href: "/", label: "Ranking", title: "Account intent", icon: ListOrdered, match: ["/accounts"], action: { label: "New run", href: "/#run" } },
+    { href: "/costs", label: "Costs", title: "Costs and budget", icon: Wallet },
   ],
 };

@@ -2,6 +2,21 @@
 
 Built from the GitHub release notes. Each version links to its release page.
 
+## 0.1.6 (2026-10-11)
+
+#### Money safety: period budget, reserve then settle, stored results
+
+Before this, a paid run was limited by the cap per run, an in-memory rate limit and the token balance. The cap was kept per run, so two runs started together each had their own, and a re-run in a new window paid again. A browser could also lower the cap through `confirmedMaxMicros`.
+
+- Period budget: a daily and a monthly amount (UTC), $10 and $50 by default, saved in `budget.json`. The signed-in owner changes it on the new Costs page (`PUT /api/budget`, session and CSRF token). A run request cannot raise it. Starting values come from `LOOOT_INTENT_DAILY_USD` and `LOOOT_INTENT_MONTHLY_USD`.
+- Reserve then settle, per call: each of the up to 16 calls in flight reserves its list price under a lock file before it is made, and is refused if used plus reserved plus the price would pass either budget. The reservation becomes the real cost when the call ends. A call looot answered with an error releases it. A call still running keeps its reservation and is never counted as $0. The next run looks up pending calls with `GET /v1/runs/{id}` and settles them. A reservation that cannot be looked up is released after 24 hours.
+- Stored results: a finished call is stored under its stable key (account, signal, normalised input, freshness window), so the same request inside the window is answered with no call and no charge. The key has no date or time salt.
+- The per-run cap comes from `LOOOT_INTENT_MAX_RUN_USD` only. `confirmedMaxMicros` now only checks the price and no longer lowers the cap.
+- The sidebar spend panel and the Costs page show used, reserved and remaining for today and this month, and a skipped call names the limit. The CLI refuses a run above what is left unless `--partial` is passed.
+- Tests: 117 before, 153 after (36 new).
+
+Migration: none. This repo has no database. The budget is a new file, `budget.json`, created in `LOOOT_INTENT_DIR` on first use. Run one instance on a persistent disk, since the file is not shared between hosts.
+
 ## 0.1.5 (2026-10-11)
 
 #### Added: third-party buying intent

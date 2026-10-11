@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import type { Ledger } from "./budget";
 import type { IntentConfig } from "./config";
 import { LoootError, type PriceMap, type Runner } from "./looot";
 import { toMicros } from "./money";
@@ -80,11 +82,19 @@ function shortHash(text: string): string {
 }
 
 /**
- * One key per (account, signal, input, window). The same key replays the stored run and never charges twice,
- * so a re-run inside the window, or after a crash, costs nothing for calls that already finished.
+ * One key per (account, signal, normalised input, refresh period). No date or time salt: the period is the
+ * freshness window (day, week or month) from the config, so a fresh lookup after the window is an explicit new request
+ * with its own stable key. The same key replays the stored run and never charges twice, so a re-run inside the
+ * window, or after a crash, costs nothing for calls that already finished.
  */
 export function idempotencyKey(domain: string, def: SignalDef, input: Record<string, unknown>, cfg: IntentConfig, now: Date): string {
   return `intent:v1:${domain}:${def.id}:${shortHash(JSON.stringify(input))}:${windowStamp(now, cfg.freshnessWindow)}`;
+}
+
+/** Hash of what a paid call asks for: endpoint and input, with sorted keys and lowercased text. Guards a short key against a collision. */
+export function callFingerprint(endpointId: string, input: Record<string, unknown>): string {
+  const norm = (v: unknown): unknown => (typeof v === "string" ? v.trim().toLowerCase() : Array.isArray(v) ? v.map(norm) : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1)).map(([k, x]) => [k, norm(x)])) : v);
+  return createHash("sha256").update(JSON.stringify([endpointId, norm(input)])).digest("hex");
 }
 
 export interface RunOptions {
@@ -99,6 +109,8 @@ export interface RunOptions {
   capMicros: number;
   /** Readings from earlier runs, for signals that score growth. */
   snapshots?: Snapshots;
+  /** Period budget, reservations and stored answers. Left out in demo mode and in tests that do not need it. */
+  ledger?: Ledger;
   now?: Date;
   demo?: boolean;
   onProgress?: (done: number, total: number, domain: string) => void;
@@ -123,6 +135,8 @@ export async function runIntent(opts: RunOptions): Promise<{ result: RunResult; 
   let committed = 0; // list price reserved for calls made or in flight, replaced by the real charge when a call ends
   let spent = 0;
   let skippedByCap = 0;
+  let skippedByBudget = 0;
+  let budgetMessage: string | null = null;
   let pendingCalls = 0;
   let failedCalls = 0;
   let aborted: string | null = null;
@@ -133,18 +147,50 @@ export async function runIntent(opts: RunOptions): Promise<{ result: RunResult; 
     const base = { signalId: def.id, listPriceMicros, events: [] as SignalEvent[], costMicros: 0 };
     if (aborted) return { ...base, status: "skipped_cap", message: aborted };
     if (!opts.demo && unpriced.has(def.endpointId)) return { ...base, status: "skipped_price", message: "Source unavailable: the catalog has no readable price for this endpoint." };
+    const input = def.buildInput(domain);
+    const ledger = opts.demo ? undefined : opts.ledger;
+    const key = idempotencyKey(domain, def, input, cfg, now);
+    const fp = callFingerprint(def.endpointId, input);
+    // A stored answer to the same request costs nothing, so it is checked before the caps.
+    if (ledger) {
+      const stored = await ledger.recall(key, fp, now);
+      if (stored) {
+        try {
+          const parsed = def.parse(stored.result, { icp: cfg.icp, now });
+          return { signalId: def.id, status: "ok", costMicros: 0, listPriceMicros, runId: stored.runId, events: parsed.events, metric: parsed.metric, message: "Answered from the stored result. No call, no charge." };
+        } catch {
+          // A stored result that no longer parses is called again; the same key replays it at looot with no second charge.
+        }
+      }
+    }
+    // Check order: quote (before the run), per-run cap, atomic reservation against the period budget, then the call.
     if (!opts.demo && committed + listPriceMicros > opts.capMicros) {
       skippedByCap += 1;
       return { ...base, status: "skipped_cap", message: "Spend cap reached." };
     }
+    // Counted before any await, so 16 workers cannot all pass the per-run cap while the reservation is pending.
     if (!opts.demo) committed += listPriceMicros;
-    const input = def.buildInput(domain);
+    if (ledger) {
+      let held: Awaited<ReturnType<Ledger["reserve"]>>;
+      try {
+        held = await ledger.reserve(key, listPriceMicros, now, fp);
+      } catch (e) {
+        held = { ok: false, message: (e as Error).message };
+      }
+      if (!held.ok) {
+        skippedByBudget += 1;
+        budgetMessage = held.message;
+        committed -= listPriceMicros;
+        return { ...base, status: "skipped_budget", message: held.message };
+      }
+    }
     try {
-      const run = await looot.runAndWait(def.endpointId, input, idempotencyKey(domain, def, input, cfg, now));
+      const run = await looot.runAndWait(def.endpointId, input, key);
       const cost = opts.demo ? 0 : toMicros(run.actualCost);
       if (run.status === "completed") {
         committed += cost - listPriceMicros;
         spent += cost;
+        await ledger?.settle(key, fp, cost, now, run);
         try {
           const parsed = def.parse(run.result, { icp: cfg.icp, now });
           return { signalId: def.id, status: "ok", costMicros: cost, listPriceMicros, runId: run.runId, events: parsed.events, metric: parsed.metric };
@@ -156,17 +202,23 @@ export async function runIntent(opts: RunOptions): Promise<{ result: RunResult; 
       if (run.status === "failed" || run.status === "blocked" || run.status === "stopped") {
         committed += cost - listPriceMicros;
         spent += cost;
+        await ledger?.settle(key, fp, cost, now);
         failedCalls += 1;
         return { ...base, status: "failed", costMicros: cost, runId: run.runId, errorCode: run.error?.code ?? run.status, message: run.error?.message };
       }
       // queued, running, reconciliation_pending, pending_provider: the provider has not finished. Keep the reservation.
+      // The reservation stays until the run ends. It is never recorded failed at zero.
       pendingCalls += 1;
+      await ledger?.attach(key, run.runId);
       return { ...base, status: "pending", runId: run.runId, message: `Run ${run.runId} is ${run.status}.` };
     } catch (e) {
       committed -= listPriceMicros; // the request never produced a run
       failedCalls += 1;
       const err = e instanceof LoootError ? e : null;
       const code = err?.code ?? "network_error";
+      // An HTTP answer from looot means the call did not run, so the reservation goes back. A network error is unknown:
+      // the request may have been accepted, so the reservation stays until a replay settles it or the hard expiry.
+      if (err) await ledger?.release(key);
       if (err && (FAIL_STOPS.has(code) || err.status === 401 || err.status === 402)) aborted = `Stopped: ${err.message}`;
       return { ...base, status: "failed", errorCode: code, message: (e as Error).message };
     }
@@ -202,6 +254,8 @@ export async function runIntent(opts: RunOptions): Promise<{ result: RunResult; 
     quotedMicros: quote.totalMicros,
     spentMicros: spent,
     skippedByCap,
+    skippedByBudget,
+    budgetMessage,
     pendingCalls,
     failedCalls,
     aborted,

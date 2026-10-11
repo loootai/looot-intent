@@ -1,8 +1,9 @@
+import { Budget, type BudgetStatus } from "@/engine/budget";
 import { loadConfig, type IntentConfig } from "@/engine/config";
 import { DEMO_DOMAINS, DEMO_ICP, DEMO_NOW, demoRunner, demoSnapshots } from "@/engine/demo";
 import { buildQuote, parseDomains, runIntent } from "@/engine/engine";
 import { fetchPrices, hasLoootToken, loootFromEnv } from "@/engine/looot";
-import { toMicros } from "@/engine/money";
+import { toMicros, usd } from "@/engine/money";
 import { FALLBACK_PRICES, PRICE_UNITS } from "@/engine/signals";
 import { readState, writeState, type State } from "@/engine/state";
 import { maxRunUsd } from "@/lib/auth/policy";
@@ -38,6 +39,29 @@ export async function getState(): Promise<State> {
   return globalThis.__intentDemoState;
 }
 
+/** The period budget file. Demo mode only reads it, so a demo shows the owner's real numbers and writes nothing. */
+export function getBudget(): Budget {
+  return new Budget();
+}
+
+/** Used, reserved and remaining for today and this month. */
+export async function budgetStatus(now: Date = new Date()): Promise<BudgetStatus> {
+  return getBudget().status(now);
+}
+
+/** Owner only (the route checks the session and the CSRF token). Saves the daily and monthly budget in dollars. */
+export async function setBudget(input: { dailyUsd: unknown; monthlyUsd: unknown }): Promise<BudgetStatus> {
+  if (isDemo()) throw new Error("Demo mode has no budget to change.");
+  const b = getBudget();
+  await b.setLimits({ dailyMicros: toMicros(Number(input.dailyUsd)), monthlyMicros: toMicros(Number(input.monthlyUsd)) });
+  return b.status();
+}
+
+/** The per-run cap in dollars. Comes from the server's environment only. */
+export function serverCapUsd(): number {
+  return maxRunUsd();
+}
+
 export interface QuoteReply {
   quote: Quote;
   rejected: string[];
@@ -56,8 +80,9 @@ export async function quoteFor(domainText: string): Promise<QuoteReply> {
 
 /**
  * Runs the engine for the UI and saves the result. The UI never sees the token.
- * The ceiling is the server's LOOOT_INTENT_MAX_RUN_USD, or less if the caller confirmed a smaller quote. The caller cannot raise it.
- * The server prices the list again and refuses before any paid call when that price is above the ceiling or above the quote the caller confirmed.
+ * The per-run cap is the server's LOOOT_INTENT_MAX_RUN_USD. Nothing in the request sets or lowers it; the confirmed amount only checks the price.
+ * Check order: quote (the server prices the list again and refuses when it is above the quote the caller confirmed), per-run cap,
+ * the period budget (an atomic reservation per call), then the call.
  */
 export async function runFor(input: { domains: string; icp?: string; confirmedMaxMicros: number }): Promise<RunResult> {
   const { domains } = parseDomains(input.domains);
@@ -66,7 +91,7 @@ export async function runFor(input: { domains: string; icp?: string; confirmedMa
   const cfg = appConfig();
   if (input.icp?.trim()) cfg.icp.description = input.icp.trim();
   const serverCapMicros = toMicros(maxRunUsd());
-  const capMicros = Math.min(serverCapMicros, input.confirmedMaxMicros);
+  const capMicros = serverCapMicros;
   if (isDemo()) {
     const { result, snapshots } = await runIntent({ config: cfg, domains, looot: demoRunner(), prices: FALLBACK_PRICES, capMicros, snapshots: globalThis.__intentDemoState?.snapshots ?? demoSnapshots(), now: DEMO_NOW, demo: true });
     globalThis.__intentDemoState = { run: result, snapshots };
@@ -78,8 +103,13 @@ export async function runFor(input: { domains: string; icp?: string; confirmedMa
   const dollars = (m: number) => `$${(m / 1e6).toFixed(2)}`;
   if (quote.totalMicros > input.confirmedMaxMicros) throw new Error(`The price now (${dollars(quote.totalMicros)}) is above the quote you confirmed (${dollars(input.confirmedMaxMicros)}). Get a new quote.`);
   if (quote.totalMicros > serverCapMicros) throw new Error(`The quote (${dollars(quote.totalMicros)}) is above this server's per-run cap (${dollars(serverCapMicros)}). Score fewer accounts, or raise LOOOT_INTENT_MAX_RUN_USD on the server.`);
+  // Runs that ended since last time settle first, then the quote must fit in what is left of the period budget.
+  const budget = getBudget();
+  await budget.reconcile(looot);
+  const room = await budget.status();
+  if (quote.totalMicros > room.remainingMicros) throw new Error(`The quote (${usd(quote.totalMicros)}) is above what is left of the budget (${usd(room.remainingMicros)}: ${usd(room.day.remainingMicros)} today, ${usd(room.month.remainingMicros)} this month). Raise the budget on the Costs page, or wait for the period to roll over.`);
   const state = readState();
-  const { result, snapshots } = await runIntent({ config: cfg, domains, looot, prices: live.prices, priceSource: live.source, unpriced: live.unread, capMicros, snapshots: state.snapshots });
+  const { result, snapshots } = await runIntent({ config: cfg, domains, looot, prices: live.prices, priceSource: live.source, unpriced: live.unread, capMicros, snapshots: state.snapshots, ledger: budget });
   writeState({ run: result, snapshots });
   return result;
 }

@@ -12,7 +12,7 @@ export function CostPanel({ run }: { run: RunResult }) {
       if (b.status === "ok") x.ok += 1;
       else if (b.status === "pending") x.pending += 1;
       else if (b.status === "skipped_price") x.unavailable += 1;
-      else if (b.status === "skipped_cap") x.skipped += 1;
+      else if (b.status === "skipped_cap" || b.status === "skipped_budget") x.skipped += 1;
       else x.failed += 1;
       per.set(b.signalId, x);
     }
@@ -34,6 +34,7 @@ export function CostPanel({ run }: { run: RunResult }) {
       <p className="mt-2 text-12 text-mute">
         {run.demo ? "Demo data. No looot call was made, so the spend is zero. The quote is what the same run costs live." : "Spend is what looot charged. A failed call costs nothing."}
         {run.pendingCalls > 0 && ` ${run.pendingCalls} calls are still running at the provider. They are pending, not failed. Run again in the same week to collect them without a second charge.`}
+        {(run.skippedByBudget ?? 0) > 0 && ` ${run.skippedByBudget} calls were skipped because the period budget would have been passed.`}
         {run.skippedByCap > 0 && ` ${run.skippedByCap} calls were skipped because the cap would have been passed.`}
       </p>
       <div className="mt-3 overflow-x-auto">
