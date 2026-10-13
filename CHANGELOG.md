@@ -2,6 +2,10 @@
 
 Built from the GitHub release notes. Each version links to its release page.
 
+## Unreleased
+
+- Fix: sign-in from Chrome failed with 403 "Cross-site request refused". The app sends `Referrer-Policy: no-referrer`, so Chrome posts the form with `Origin: null`. `sameOrigin()` now ignores a `null` origin and falls back to `Sec-Fetch-Site`, which must be `same-origin` or `none`.
+
 ## 0.1.6 (2026-10-11)
 
 #### Money safety: period budget, reserve then settle, stored results

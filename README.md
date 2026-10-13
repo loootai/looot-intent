@@ -1,4 +1,16 @@
-<p align="center"><img src="assets/hero.png" alt="looot-intent" width="100%"></p>
+![looot-intent: ranked accounts with a buying stage, the points behind each score and the cost of the run, scored for Clay, Apollo.io, ZoomInfo, Apify, Firecrawl, Exa and Tavily](docs/media/banner.png)
+
+*Logos and names belong to their owners. Public data from a live run on 2026-10-13. No affiliation.*
+
+| | |
+| --- | --- |
+| ![Every account ranked, with a stage](docs/media/card-ranking.png) | ![See the cost before you spend](docs/media/card-quote.png) |
+| ![Every point has a reason and a provider](docs/media/card-score.png) | ![A timeline of the events behind the score](docs/media/card-timeline.png) |
+| ![Cap, daily and monthly budget](docs/media/card-budget.png) | ![Light and dark](docs/media/card-dark.png) |
+
+![Walkthrough of the ranking, quote, account page and costs](docs/media/demo.gif)
+
+[Watch the walkthrough as MP4](docs/media/demo.mp4)
 
 # looot-intent
 
@@ -8,7 +20,24 @@ An open-source alternative to [6sense](https://6sense.com) for account intent an
 
 > **Security notice.** Versions 0.1.3 and older had no admin sign-in. Anyone who could reach a deployed copy could read the saved run and start paid looot runs on your token. If you run v0.1.3 or older on a reachable host, upgrade to v0.1.4 and set `LOOOT_INTENT_ADMIN_PASSWORD`. See [Securing a deployment](#securing-a-deployment).
 
-![Ranked accounts, light](docs/screenshots/dashboard-light.png)
+
+## Live run
+
+Run on 2026-10-13 (UTC, 23:38 to 23:40) with the CLI against the real looot API. The accounts were seven companies in looot's own market: Clay, Apollo.io, ZoomInfo, Apify, Firecrawl, Exa and Tavily. To stay under a $0.25 budget I switched off six signals (tech stack, SEO, traffic, LinkedIn ads, headcount and buying intent), so five signals ran: hiring, funding, news, Google ads and Reddit mentions.
+
+- 35 calls, $0.23632 charged, 0 failed, 0 pending. The charge equals the list price and matches the run list on the looot side.
+- Every account returned data for all five signals.
+- Ranking: clay.com 96, firecrawl.dev 94, exa.ai 87, apollo.io 70, zoominfo.com 68, apify.com 56, tavily.com 49. Four are `deciding`, three `considering`.
+- The screenshots and the video above come from this run, served by the web UI with `LOOOT_INTENT_CONFIG` pointing at the same five-signal config. Nothing in them is demo data.
+
+What was good. The hiring and news evidence is specific and dated: Clay had open GTM roles posted the day of the run, and Exa's news included a partnership announced four days earlier. The five parsers read the real responses without a `parse_error`.
+
+What was weak.
+- Hiring gives most accounts the same points. Five of seven hit 37.9 of 37.9, because PredictLeads returns up to 50 open roles and the config saturates at 6 matching roles. The signal separates "hiring a lot" from "not hiring", not Clay from Firecrawl. Lower the `saturation` or raise the bar for what matches to spread them out.
+- Reddit mentions search by the first label of the domain. `clay` returned posts from r/Harlem and r/WashingtonHeights, and `apollo` returned a post about summer internships. The signal gets full points for any post count, so off-topic posts still score.
+- Google ads showed 40 ads for most accounts, which looks like a page limit and not a real count.
+- Funding is old for some: Apollo's newest financing event is 38 months old and ZoomInfo's 77 months old, so they score 0 there.
+- Tech stack, SEO, traffic, LinkedIn ads, headcount and buying intent were not run live, so their parsers are still unchecked against real responses (`shapeVerified` stays `false` for them).
 
 ## What it does
 
@@ -252,7 +281,7 @@ How to file an issue. Open one at https://github.com/loootai/looot-intent/issues
 
 ## Status
 
-No paid looot run was made. Request fields follow each endpoint's documented parameters in the catalog. Response parsers are built from provider docs and fixtures and read defensively, but no real response body has been checked against them. `shapeVerified` is `false` for all eleven signals in `src/engine/signals.ts`. Expect to adjust a parser after your first live run, and run `--dry-run` and a 2-domain run first.
+One live run was made on 2026-10-13 (see Live run). It covered five of the eleven signals: hiring, funding, news, Google ads and Reddit mentions. Their parsers read real responses without errors. The other six have not been run against a real response. `shapeVerified` is still `false` for all eleven in `src/engine/signals.ts`. Expect to adjust a parser after your first run with them, and run `--dry-run` and a 2-domain run first.
 - The PredictLeads path parameter is sent as `company_id_or_domain`, as its description says. The catalog parameter list does not show it.
 
 If a parser fails on a real response, open an issue with the raw body (see Troubleshooting).
